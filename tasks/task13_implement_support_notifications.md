@@ -1,6 +1,6 @@
 # Tarefa 13: Implementar o Módulo de Suporte & Notificações
 
-*   **Arquivo**: `tasks/task13_implement_support_notifications.md`
+*   **STATUS**: **NÃO CONCLUÍDA**
 *   **Objetivo**: Desenvolver as funcionalidades básicas de suporte ao usuário e o sistema de notificações por e-mail para eventos críticos.
 *   **Referência no `tatame.md`**: Seções "3.6) Suporte & Documentação" e "3.7) Notificações".
 

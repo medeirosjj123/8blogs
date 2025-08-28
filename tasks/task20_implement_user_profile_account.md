@@ -1,6 +1,6 @@
 # Tarefa 20: Implementar o Módulo de Perfil e Conta do Usuário
 
-*   **Arquivo**: `tasks/task20_implement_user_profile_account.md`
+*   **STATUS**: **PARCIALMENTE CONCLUÍDA**
 *   **Objetivo**: Desenvolver a funcionalidade que permite ao usuário visualizar e gerenciar suas informações pessoais, configurações de segurança e detalhes da conta.
 *   **Referência no `tatame.md`**: Seção "2) Branding & UI/UX" -> "Estrutura IA (informação)" -> "Perfil/Conta".
 
@@ -27,7 +27,7 @@ Este módulo será implementado em etapas, focando na gestão de informações d
 1.  **Objetivo**: Permitir que o usuário edite suas informações básicas (ex: nome).
 2.  **Ação**:
     *   No frontend, adicione um formulário na página de perfil para edição de campos como o nome.
-    *   No backend (`apps/api`), crie uma rota `PUT /api/users/me` para atualizar as informações do usuário.
+    *   **PENDENTE**: No backend (`apps/api`), crie uma rota `PUT /api/users/me` para atualizar as informações do usuário.
     *   Integre o formulário do frontend com essa rota da API.
     *   **Verificação**: Edite o nome do usuário no frontend e confirme que a alteração é persistida no banco de dados.
 

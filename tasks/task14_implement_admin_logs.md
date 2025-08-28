@@ -1,6 +1,6 @@
 # Tarefa 14: Implementar o Módulo de Administração e Logs
 
-*   **Arquivo**: `tasks/task14_implement_admin_logs.md`
+*   **STATUS**: **NÃO CONCLUÍDA** (Apenas a configuração básica de logs do Pino está pronta.)
 *   **Objetivo**: Desenvolver as funcionalidades essenciais para a administração da plataforma e garantir o registro adequado de logs e auditoria.
 *   **Referência no `tatame.md`**: Seções "3.9) Administração" e "3.10) Logs & Auditoria".
 

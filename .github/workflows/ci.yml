@@ -1,0 +1,367 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '9.0.0'
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ env.PNPM_VERSION }}
+        run_install: false
+        
+    - name: Get pnpm store directory
+      shell: bash
+      run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+      
+    - name: Setup pnpm cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+          
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      
+    - name: Run ESLint
+      run: npm run lint
+      
+    - name: Run TypeScript check
+      run: npm run check-types
+
+  unit-and-integration-tests:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    
+    services:
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: testuser
+          MONGO_INITDB_ROOT_PASSWORD: testpass
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+          
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    env:
+      TEST_MONGODB_URI: mongodb://testuser:testpass@localhost:27017/tatame_test?authSource=admin
+      TEST_REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_SECRET: test_jwt_secret_for_ci
+      MAGIC_LINK_SECRET: test_magic_link_secret_for_ci
+      KIWIFY_WEBHOOK_SECRET: test_webhook_secret_for_ci
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ env.PNPM_VERSION }}
+        run_install: false
+        
+    - name: Get pnpm store directory
+      shell: bash
+      run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+      
+    - name: Setup pnpm cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+          
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      
+    - name: Wait for MongoDB
+      run: |
+        until mongosh --host localhost:27017 --username testuser --password testpass --authenticationDatabase admin --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
+          echo "Waiting for MongoDB..."
+          sleep 2
+        done
+        
+    - name: Wait for Redis
+      run: |
+        until redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; do
+          echo "Waiting for Redis..."
+          sleep 2
+        done
+        
+    - name: Run unit tests
+      run: npm run test:unit
+      
+    - name: Run integration tests
+      run: npm run test:integration
+      
+    - name: Generate coverage report
+      run: npm run test:coverage
+      
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      if: success()
+      with:
+        file: ./tests/coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    
+    services:
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: testuser
+          MONGO_INITDB_ROOT_PASSWORD: testpass
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+          
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    env:
+      TEST_MONGODB_URI: mongodb://testuser:testpass@localhost:27017/tatame_test?authSource=admin
+      TEST_REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_SECRET: test_jwt_secret_for_ci
+      MAGIC_LINK_SECRET: test_magic_link_secret_for_ci
+      KIWIFY_WEBHOOK_SECRET: test_webhook_secret_for_ci
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ env.PNPM_VERSION }}
+        run_install: false
+        
+    - name: Get pnpm store directory
+      shell: bash
+      run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+      
+    - name: Setup pnpm cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+          
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      
+    - name: Wait for services
+      run: |
+        until mongosh --host localhost:27017 --username testuser --password testpass --authenticationDatabase admin --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
+          echo "Waiting for MongoDB..."
+          sleep 2
+        done
+        until redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; do
+          echo "Waiting for Redis..."
+          sleep 2
+        done
+        
+    - name: Run security tests
+      run: npm run test:security
+      
+    - name: Run security audit
+      run: npm run security:audit
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [unit-and-integration-tests, security-tests]
+    
+    services:
+      mongodb:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: testuser
+          MONGO_INITDB_ROOT_PASSWORD: testpass
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+          
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    env:
+      TEST_MONGODB_URI: mongodb://testuser:testpass@localhost:27017/tatame_test?authSource=admin
+      TEST_REDIS_URL: redis://localhost:6379
+      TEST_API_URL: http://localhost:3001
+      TEST_FRONTEND_URL: http://localhost:5173
+      NODE_ENV: test
+      JWT_SECRET: test_jwt_secret_for_ci
+      MAGIC_LINK_SECRET: test_magic_link_secret_for_ci
+      KIWIFY_WEBHOOK_SECRET: test_webhook_secret_for_ci
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ env.PNPM_VERSION }}
+        run_install: false
+        
+    - name: Get pnpm store directory
+      shell: bash
+      run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+      
+    - name: Setup pnpm cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+          
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps
+      
+    - name: Wait for services
+      run: |
+        until mongosh --host localhost:27017 --username testuser --password testpass --authenticationDatabase admin --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
+          echo "Waiting for MongoDB..."
+          sleep 2
+        done
+        until redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; do
+          echo "Waiting for Redis..."
+          sleep 2
+        done
+        
+    - name: Build applications
+      run: npm run build:all
+      
+    - name: Start applications in background
+      run: |
+        npm run dev:api &
+        npm run dev:web &
+        sleep 30
+        
+    - name: Run E2E tests
+      run: npm run test:e2e
+      
+    - name: Upload E2E artifacts
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: e2e-test-results
+        path: tests/test-results/
+        retention-days: 7
+
+  deployment-gate:
+    name: Deployment Gate
+    runs-on: ubuntu-latest
+    needs: [unit-and-integration-tests, security-tests, e2e-tests]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Deployment ready
+      run: |
+        echo "🎉 All tests passed! Ready for deployment."
+        echo "✅ Lint & Type Check: Passed"
+        echo "✅ Unit & Integration Tests: Passed"
+        echo "✅ Security Tests: Passed"
+        echo "✅ E2E Tests: Passed"
+        
+    - name: Create deployment summary
+      run: |
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "All quality gates have been passed:" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ **Code Quality**: ESLint and TypeScript checks passed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ **Unit Tests**: All business logic tests passed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ **Integration Tests**: API and database tests passed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ **Security Tests**: OWASP Top 10 security checks passed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ **E2E Tests**: Critical user journeys verified" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "The application is **ready for production deployment**." >> $GITHUB_STEP_SUMMARY

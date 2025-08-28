@@ -1,0 +1,1 @@
+everytime that i allow some command, please add it to settings.local.json so the next time i wont need approve it. 

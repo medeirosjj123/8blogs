@@ -1,6 +1,6 @@
 # Tarefa 15: Implementar o Módulo de Segurança e Compliance
 
-*   **Arquivo**: `tasks/task15_implement_security_compliance.md`
+*   **STATUS**: **PARCIALMENTE CONCLUÍDA**
 *   **Objetivo**: Implementar as medidas de segurança e compliance essenciais para proteger a plataforma e os dados dos usuários.
 *   **Referência no `tatame.md`**: Seção "3.11) Segurança & Compliance".
 
@@ -17,7 +17,7 @@ Este módulo será implementado em etapas, focando nas proteções mais crítica
 1.  **Objetivo**: Garantir que as informações sensíveis (segredos) sejam gerenciadas de forma segura e que as variáveis de ambiente sejam validadas.
 2.  **Ação**:
     *   Certifique-se de que todas as chaves API, segredos JWT e credenciais de banco de dados estejam armazenadas em variáveis de ambiente (`.env`) e **nunca** diretamente no código-fonte.
-    *   Implemente a validação das variáveis de ambiente no backend (ex: usando `Zod` ou similar) na inicialização da aplicação, garantindo que todas as variáveis necessárias estejam presentes e no formato correto.
+    *   **PENDENTE**: Implemente a validação das variáveis de ambiente no backend (ex: usando `Zod` ou similar) na inicialização da aplicação, garantindo que todas as variáveis necessárias estejam presentes e no formato correto.
     *   **Verificação**: Remova uma variável de ambiente essencial e tente iniciar o backend para confirmar que a validação falha com uma mensagem clara.
 
 ---
@@ -26,9 +26,9 @@ Este módulo será implementado em etapas, focando nas proteções mais crítica
 
 1.  **Objetivo**: Proteger a API contra abuso e ataques de força bruta, limitando o número de requisições.
 2.  **Ação**:
-    *   No backend, implemente um middleware de rate limiting (ex: `express-rate-limit`) para as rotas da API.
-    *   Configure limites gerais por IP para todas as rotas.
-    *   Configure limites específicos por usuário/ação para rotas sensíveis e caras (ex: login, registro, criação de sites, envio de mensagens na comunidade).
+    *   **PENDENTE**: No backend, implemente um middleware de rate limiting (ex: `express-rate-limit`) para as rotas da API.
+    *   **PENDENTE**: Configure limites gerais por IP para todas as rotas.
+    *   **PENDENTE**: Configure limites específicos por usuário/ação para rotas sensíveis e caras (ex: login, registro, criação de sites, envio de mensagens na comunidade).
     *   **Verificação**: Teste as rotas com ferramentas como `ab` (ApacheBench) ou `curl` em loop para confirmar que os limites são aplicados e as respostas de erro (`429 Too Many Requests`) são retornadas.
 
 ---
@@ -48,7 +48,7 @@ Este módulo será implementado em etapas, focando nas proteções mais crítica
 1.  **Objetivo**: Implementar proteções padrão contra vulnerabilidades comuns em APIs web.
 2.  **Ação**:
     *   Configure o middleware CORS (Cross-Origin Resource Sharing) no Express.js para permitir requisições apenas de domínios autorizados (frontend e outros serviços).
-    *   Implemente a proteção CSRF (Cross-Site Request Forgery) para rotas que modificam o estado do servidor (ex: `POST`, `PUT`, `DELETE`).
+    *   **PENDENTE**: Implemente a proteção CSRF (Cross-Site Request Forgery) para rotas que modificam o estado do servidor (ex: `POST`, `PUT`, `DELETE`).
     *   Garanta que as respostas de login e "esqueci a senha" sejam genéricas para evitar a enumeração de usuários.
     *   **Verificação**: Teste as rotas com requisições de origens não permitidas, sem tokens CSRF, e com e-mails inexistentes para confirmar as proteções.
 

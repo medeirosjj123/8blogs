@@ -1,6 +1,6 @@
 # Tarefa 21: Implementar o Módulo de Legal/Políticas e Consentimento
 
-*   **Arquivo**: `tasks/task21_implement_legal_compliance.md`
+*   **STATUS**: **NÃO CONCLUÍDA**
 *   **Objetivo**: Garantir que a plataforma esteja em conformidade com as regulamentações de privacidade e dados, exibindo políticas e gerenciando o consentimento do usuário.
 *   **Referência no `tatame.md`**: Seção "3.11) Segurança & Compliance" -> "Políticas".
 
