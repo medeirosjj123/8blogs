@@ -55,16 +55,16 @@ export const Login: React.FC = () => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center mb-6">
           <div className="w-12 h-12 bg-gradient-to-br from-coral to-coral-dark rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-xl">E</span>
+            <span className="text-white font-bold text-xl">8</span>
           </div>
         </div>
         <h2 className="text-center text-2xl font-bold text-slate-900">
-          Bem-vindo à Escola do SEO
+          Entre no 8blogs
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
           Não tem uma conta?{' '}
           <Link to="/register" className="font-medium text-coral hover:text-coral-dark">
-            Cadastre-se gratuitamente
+            Crie sua conta grátis
           </Link>
         </p>
       </div>

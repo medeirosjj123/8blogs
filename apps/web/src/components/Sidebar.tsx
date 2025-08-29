@@ -19,11 +19,11 @@ export const Sidebar: React.FC = () => {
   };
   
   const navItems: NavItem[] = [
-    { path: '/', icon: <Home size={18} />, label: 'Dojo' },
-    { path: '/cursos', icon: <BookOpen size={18} />, label: 'Treinos' },
+    { path: '/', icon: <Home size={18} />, label: 'Dashboard' },
+    { path: '/cursos', icon: <BookOpen size={18} />, label: 'Cursos' },
     { path: '/comunidade', icon: <Users size={18} />, label: 'Comunidade' },
     { path: '/descobrir', icon: <Search size={18} />, label: 'Descobrir' },
-    { path: '/ferramentas', icon: <Wrench size={18} />, label: 'Arsenal' },
+    { path: '/ferramentas', icon: <Wrench size={18} />, label: 'Ferramentas' },
     { path: '/perfil', icon: <User size={18} />, label: 'Perfil' },
   ];
 
@@ -38,15 +38,15 @@ export const Sidebar: React.FC = () => {
           <div className="flex items-center">
             <div className="relative">
               <div className="w-11 h-11 bg-gradient-to-br from-slate-800 to-slate-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-lg">侍</span>
+                <span className="text-white font-bold text-lg">8</span>
               </div>
               <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-gradient-to-br from-coral-light to-coral rounded-full border-2 border-white"></div>
             </div>
             <div className="ml-3">
               <h1 className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-                Escola do SEO
+                8blogs
               </h1>
-              <p className="text-xs text-slate-500">A Escola Mais Completa</p>
+              <p className="text-xs text-slate-500">Plataforma para Blogueiros</p>
             </div>
           </div>
         </div>
@@ -57,10 +57,10 @@ export const Sidebar: React.FC = () => {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Sparkles size={14} className="text-coral" />
-                <span className="text-xs font-semibold text-slate-700">Nível {userLevel}</span>
+                <span className="text-xs font-semibold text-slate-700">Plano Pro</span>
               </div>
               <span className="text-xs text-slate-500 bg-white px-2 py-0.5 rounded-full">
-                Faixa {userBelt}
+                3 blogs
               </span>
             </div>
             <div className="space-y-2">
@@ -71,8 +71,8 @@ export const Sidebar: React.FC = () => {
                 />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-500 font-medium">650 XP</span>
-                <span className="text-[10px] text-slate-400">1000 XP</span>
+                <span className="text-[10px] text-slate-500 font-medium">45/100</span>
+                <span className="text-[10px] text-slate-400">reviews</span>
               </div>
             </div>
           </div>

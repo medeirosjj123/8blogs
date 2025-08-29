@@ -252,7 +252,7 @@ export const Tools: React.FC = () => {
       
       <div className="mb-8">
         <h1 className="text-3xl font-black text-tatame-black mb-2">Ferramentas</h1>
-        <p className="text-tatame-gray-600">Automatize e otimize seus sites com nossas ferramentas exclusivas</p>
+        <p className="text-tatame-gray-600">Crie, otimize e monetize seus blogs com facilidade</p>
       </div>
 
       {/* Status Filter */}

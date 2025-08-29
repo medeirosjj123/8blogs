@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, TrendingUp, Clock, Target, Award, PlayCircle, Trophy, Zap, Sparkles, ChevronRight, Loader2, BookOpen } from 'lucide-react';
+import { ArrowRight, TrendingUp, Clock, Target, Award, PlayCircle, Trophy, Zap, Sparkles, ChevronRight, Loader2, BookOpen, DollarSign, FileText, Globe } from 'lucide-react';
 import { useStats, useActivities, useAchievements } from '../hooks/useStats';
 import { useCourses } from '../hooks/useCourses';
 import { useAuth } from '../contexts/AuthContext';
@@ -62,40 +62,40 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  const statsCards = stats ? [
+  const statsCards = [
     { 
-      label: 'Progresso', 
-      value: `${stats.progress.total}%`, 
-      change: stats.progress.change, 
-      icon: <TrendingUp size={18} />, 
+      label: 'Blogs Ativos', 
+      value: '2/3', 
+      change: '+1 este mês', 
+      icon: <Globe size={18} />, 
       bgColor: 'bg-gradient-to-br from-blue-50 to-indigo-50',
       iconColor: 'text-blue-600' 
     },
     { 
-      label: 'Sequência', 
-      value: `${stats.streak.days} dias`, 
-      change: stats.streak.active ? '🔥' : '❄️', 
-      icon: <Zap size={18} />, 
+      label: 'Reviews Geradas', 
+      value: '45/100', 
+      change: '+12 esta semana', 
+      icon: <FileText size={18} />, 
       bgColor: 'bg-gradient-to-br from-amber-50 to-orange-50',
       iconColor: 'text-amber-600' 
     },
     { 
-      label: 'Ranking', 
-      value: `#${stats.ranking.position}`, 
-      change: `↑${stats.ranking.change}`, 
-      icon: <Trophy size={18} />, 
-      bgColor: 'bg-gradient-to-br from-purple-50 to-pink-50',
-      iconColor: 'text-purple-600' 
-    },
-    { 
-      label: 'Tempo Total', 
-      value: formatTime(stats.studyTime.total), 
-      change: `+${formatTime(stats.studyTime.change)}`, 
-      icon: <Clock size={18} />, 
+      label: 'Receita Estimada', 
+      value: 'R$ 2.450', 
+      change: '+15% este mês', 
+      icon: <DollarSign size={18} />, 
       bgColor: 'bg-gradient-to-br from-emerald-50 to-teal-50',
       iconColor: 'text-emerald-600' 
     },
-  ] : [];
+    { 
+      label: 'Posts Publicados', 
+      value: '28', 
+      change: '+8 esta semana', 
+      icon: <TrendingUp size={18} />, 
+      bgColor: 'bg-gradient-to-br from-purple-50 to-pink-50',
+      iconColor: 'text-purple-600' 
+    },
+  ];
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -111,40 +111,31 @@ export const Dashboard: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-2">
-              Bem-vindo à Escola do SEO, {user?.name?.split(' ')[0]}!
+              Olá, {user?.name?.split(' ')[0]}!
             </h1>
-            <p className="text-slate-600">Continue evoluindo sua jornada no SEO</p>
+            <p className="text-slate-600">Monitore o desempenho dos seus blogs e receita</p>
             <button
               onClick={() => setShowOnboarding(true)}
               className="mt-2 text-sm text-coral hover:text-coral-dark transition-colors inline-flex items-center gap-1"
             >
               <PlayCircle className="w-4 h-4" />
-              Ver tutorial novamente
+              Ver guia inicial
             </button>
           </div>
           
-          {/* Belt Display */}
-          {stats && (
-            <div className="bg-white rounded-2xl p-4 shadow-soft">
-              <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">Sua Graduação</p>
-              <div className="flex items-center gap-3">
-                <div className={`h-10 w-32 rounded-lg ${getBeltClass(stats.belt)} shadow-sm flex items-center justify-center`}>
-                  <div className="flex gap-1">
-                    {[...Array(4)].map((_, i) => (
-                      <div
-                        key={i}
-                        className={`w-0.5 h-5 ${i < stats.stripes ? 'bg-white' : 'bg-white/30'} rounded-full`}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-900 capitalize">Faixa {stats.belt}</p>
-                  <p className="text-xs text-slate-500">{stats.stripes} graus • Nível {stats.level}</p>
-                </div>
+          {/* Plan Display */}
+          <div className="bg-white rounded-2xl p-4 shadow-soft">
+            <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">Seu Plano</p>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-32 rounded-lg bg-gradient-to-r from-coral to-rose-400 shadow-sm flex items-center justify-center">
+                <span className="text-white font-semibold text-sm">PRO</span>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Plano Pro</p>
+                <p className="text-xs text-slate-500">3 blogs • 100 reviews/mês</p>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
