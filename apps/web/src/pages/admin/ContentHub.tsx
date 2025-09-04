@@ -162,7 +162,7 @@ export const ContentHub: React.FC = () => {
   // API Keys Functions
   const fetchApiConfigs = async () => {
     try {
-      const response = await api.get('/admin/api-configs');
+      const response = await api.get('/api/admin/api-configs');
       if (response.data.success) {
         setApiConfigs(response.data.data);
       }
@@ -175,7 +175,7 @@ export const ContentHub: React.FC = () => {
     e.preventDefault();
     try {
       if (editingApi) {
-        const response = await api.put(`/admin/api-configs/${editingApi._id}`, apiFormData);
+        const response = await api.put('/api/admin/api-configs/${editingApi._id}', apiFormData);
         if (response.data.success) {
           toast.success('API configuration updated!');
           fetchApiConfigs();
@@ -183,7 +183,7 @@ export const ContentHub: React.FC = () => {
           setEditingApi(null);
         }
       } else {
-        const response = await api.post('/admin/api-configs', apiFormData);
+        const response = await api.post('/api/admin/api-configs', apiFormData);
         if (response.data.success) {
           toast.success('API configuration created!');
           fetchApiConfigs();
@@ -198,7 +198,7 @@ export const ContentHub: React.FC = () => {
   // AI Models Functions
   const fetchModels = async () => {
     try {
-      const response = await api.get('/admin/ai-models');
+      const response = await api.get('/api/admin/ai-models');
       if (response.data.success) {
         setModels(response.data.data);
       }
@@ -211,7 +211,7 @@ export const ContentHub: React.FC = () => {
     e.preventDefault();
     try {
       if (editingModel) {
-        const response = await api.put(`/admin/ai-models/${editingModel._id}`, modelFormData);
+        const response = await api.put('/api/admin/ai-models/${editingModel._id}', modelFormData);
         if (response.data.success) {
           toast.success('Model updated!');
           fetchModels();
@@ -219,7 +219,7 @@ export const ContentHub: React.FC = () => {
           setEditingModel(null);
         }
       } else {
-        const response = await api.post('/admin/ai-models', modelFormData);
+        const response = await api.post('/api/admin/ai-models', modelFormData);
         if (response.data.success) {
           toast.success('Model created!');
           fetchModels();
@@ -233,7 +233,7 @@ export const ContentHub: React.FC = () => {
 
   const handleSetPrimary = async (id: string) => {
     try {
-      const response = await api.post(`/admin/ai-models/${id}/set-primary`);
+      const response = await api.post('/api/admin/ai-models/${id}/set-primary');
       if (response.data.success) {
         toast.success('Model set as primary!');
         fetchModels();
@@ -245,7 +245,7 @@ export const ContentHub: React.FC = () => {
 
   const handleSetFallback = async (id: string) => {
     try {
-      const response = await api.post(`/admin/ai-models/${id}/set-fallback`);
+      const response = await api.post('/api/admin/ai-models/${id}/set-fallback');
       if (response.data.success) {
         toast.success('Model set as fallback!');
         fetchModels();
@@ -258,7 +258,7 @@ export const ContentHub: React.FC = () => {
   // Prompts Functions
   const fetchPrompts = async () => {
     try {
-      const response = await api.get('/admin/prompts');
+      const response = await api.get('/api/admin/prompts');
       if (response.data.success) {
         setPrompts(response.data.data);
       }
@@ -276,7 +276,7 @@ export const ContentHub: React.FC = () => {
       };
       
       if (editingPrompt) {
-        const response = await api.put(`/admin/prompts/${editingPrompt._id}`, data);
+        const response = await api.put('/api/admin/prompts/${editingPrompt._id}', data);
         if (response.data.success) {
           toast.success('Prompt updated!');
           fetchPrompts();
@@ -284,7 +284,7 @@ export const ContentHub: React.FC = () => {
           setEditingPrompt(null);
         }
       } else {
-        const response = await api.post('/admin/prompts', data);
+        const response = await api.post('/api/admin/prompts', data);
         if (response.data.success) {
           toast.success('Prompt created!');
           fetchPrompts();
@@ -303,7 +303,7 @@ export const ContentHub: React.FC = () => {
       if (dateRange.start) params.append('startDate', dateRange.start);
       if (dateRange.end) params.append('endDate', dateRange.end);
       
-      const response = await api.get(`/admin/analytics/content?${params}`);
+      const response = await api.get('/api/admin/analytics/content?${params}');
       if (response.data.success) {
         setAnalytics(response.data.data);
       }

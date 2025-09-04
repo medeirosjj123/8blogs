@@ -49,22 +49,22 @@ export interface Achievement {
 
 class StatsService {
   async getDashboardStats(): Promise<DashboardStats> {
-    const response = await api.get<IApiResponse<DashboardStats>>('/users/stats');
+    const response = await api.get<IApiResponse<DashboardStats>>('/api/users/stats');
     return response.data.data!;
   }
 
   async getRecentActivities(limit: number = 10): Promise<Activity[]> {
-    const response = await api.get<IApiResponse<Activity[]>>(`/activities/recent?limit=${limit}`);
+    const response = await api.get<IApiResponse<Activity[]>>(`/api/activities/recent?limit=${limit}`);
     return response.data.data!;
   }
 
   async getAchievements(): Promise<Achievement[]> {
-    const response = await api.get<IApiResponse<Achievement[]>>('/users/achievements');
+    const response = await api.get<IApiResponse<Achievement[]>>('/api/users/achievements');
     return response.data.data!;
   }
 
   async getLeaderboard(period: 'week' | 'month' | 'all' = 'week'): Promise<any[]> {
-    const response = await api.get<IApiResponse<any[]>>(`/leaderboard?period=${period}`);
+    const response = await api.get<IApiResponse<any[]>>(`/api/leaderboard?period=${period}`);
     return response.data.data!;
   }
 }

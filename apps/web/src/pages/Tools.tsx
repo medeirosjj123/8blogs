@@ -225,7 +225,7 @@ export const Tools: React.FC = () => {
       toast.success(`Abrindo ${feature.name}...`);
       navigate(feature.route);
     } else {
-      toast.info('Esta funcionalidade será implementada em breve');
+      toast('Esta funcionalidade será implementada em breve');
     }
   };
   

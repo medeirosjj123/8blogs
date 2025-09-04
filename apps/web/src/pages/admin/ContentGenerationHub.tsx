@@ -132,7 +132,7 @@ export const ContentGenerationHub: React.FC = () => {
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<ContentStats>({
     queryKey: ['content-analytics', selectedDateRange],
     queryFn: async () => {
-      const response = await api.get(`/admin/analytics/content?range=${selectedDateRange}`);
+      const response = await api.get('/api/admin/analytics/content?range=${selectedDateRange}');
       return response.data.data;
     }
   });
@@ -160,7 +160,7 @@ export const ContentGenerationHub: React.FC = () => {
   // Fetch functions
   const fetchModels = async () => {
     try {
-      const response = await api.get('/admin/ai-models');
+      const response = await api.get('/api/admin/ai-models');
       if (response.data.success) {
         setModels(response.data.data);
       }
@@ -172,7 +172,7 @@ export const ContentGenerationHub: React.FC = () => {
 
   const fetchPrompts = async () => {
     try {
-      const response = await api.get('/admin/prompts');
+      const response = await api.get('/api/admin/prompts');
       if (response.data.success) {
         setPrompts(response.data.data);
       }
@@ -199,12 +199,12 @@ export const ContentGenerationHub: React.FC = () => {
       };
 
       if (editingModel) {
-        const response = await api.put(`/admin/ai-models/${editingModel._id}`, modelData);
+        const response = await api.put('/api/admin/ai-models/${editingModel._id}', modelData);
         if (response.data.success) {
           toast.success('Modelo atualizado com sucesso!');
         }
       } else {
-        const response = await api.post('/admin/ai-models', modelData);
+        const response = await api.post('/api/admin/ai-models', modelData);
         if (response.data.success) {
           toast.success('Modelo criado com sucesso!');
         }
@@ -235,7 +235,7 @@ export const ContentGenerationHub: React.FC = () => {
 
   const handleSetPrimary = async (id: string) => {
     try {
-      const response = await api.post(`/admin/ai-models/${id}/set-primary`);
+      const response = await api.post('/api/admin/ai-models/${id}/set-primary');
       if (response.data.success) {
         toast.success('Modelo definido como primário!');
         fetchModels();
@@ -247,7 +247,7 @@ export const ContentGenerationHub: React.FC = () => {
 
   const handleSetFallback = async (id: string) => {
     try {
-      const response = await api.post(`/admin/ai-models/${id}/set-fallback`);
+      const response = await api.post('/api/admin/ai-models/${id}/set-fallback');
       if (response.data.success) {
         toast.success('Modelo definido como fallback!');
         fetchModels();
@@ -260,7 +260,7 @@ export const ContentGenerationHub: React.FC = () => {
   const handleDeleteModel = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este modelo?')) return;
     try {
-      const response = await api.delete(`/admin/ai-models/${id}`);
+      const response = await api.delete('/api/admin/ai-models/${id}');
       if (response.data.success) {
         toast.success('Modelo excluído com sucesso!');
         fetchModels();
@@ -272,7 +272,7 @@ export const ContentGenerationHub: React.FC = () => {
 
   const handleToggleModelStatus = async (id: string) => {
     try {
-      const response = await api.post(`/admin/ai-models/${id}/toggle-status`);
+      const response = await api.post('/api/admin/ai-models/${id}/toggle-status');
       if (response.data.success) {
         toast.success(response.data.message);
         fetchModels();
@@ -293,7 +293,7 @@ export const ContentGenerationHub: React.FC = () => {
       };
       
       if (editingPrompt) {
-        const response = await api.put(`/admin/prompts/${editingPrompt._id}`, data);
+        const response = await api.put('/api/admin/prompts/${editingPrompt._id}', data);
         if (response.data.success) {
           toast.success('Prompt atualizado!');
           fetchPrompts();
@@ -301,7 +301,7 @@ export const ContentGenerationHub: React.FC = () => {
           setEditingPrompt(null);
         }
       } else {
-        const response = await api.post('/admin/prompts', data);
+        const response = await api.post('/api/admin/prompts', data);
         if (response.data.success) {
           toast.success('Prompt criado!');
           fetchPrompts();

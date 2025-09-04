@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { X, ChevronRight, ChevronLeft, Rocket, Globe, MessageCircle, Award, Play } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, Rocket, Globe, MessageCircle, Award, Play, Phone } from 'lucide-react';
 
 interface OnboardingModalProps {
   isOpen: boolean;
   onClose: () => void;
   userName?: string;
+  userPlan?: 'starter' | 'pro' | 'black_belt';
 }
 
 interface OnboardingStep {
@@ -22,58 +23,103 @@ interface OnboardingStep {
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   isOpen,
   onClose,
-  userName = 'usuário'
+  userName = 'usuário',
+  userPlan = 'starter'
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
 
-  const steps: OnboardingStep[] = [
-    {
-      id: 'welcome',
-      title: `Bem-vindo à Escola do SEO, ${userName}!`,
-      description: 'Você está na escola de SEO mais completa do Brasil. Vamos te mostrar como aproveitar ao máximo todas as ferramentas disponíveis.',
-      icon: <Rocket className="w-8 h-8 text-coral" />
-    },
-    {
-      id: 'wordpress-installer',
-      title: 'Instalador de WordPress 1-Click',
-      description: 'Crie sites WordPress automaticamente em poucos cliques. Nossa ferramenta configura tudo: servidor, SSL, otimizações e muito mais.',
-      icon: <Globe className="w-8 h-8 text-blue-600" />,
-      action: {
-        label: 'Ver Instalador',
-        href: '/ferramentas'
+  const getStepsForPlan = (plan: string): OnboardingStep[] => {
+    const baseSteps: OnboardingStep[] = [
+      {
+        id: 'welcome',
+        title: `Bem-vindo ao Blog House, ${userName}!`,
+        description: plan === 'black_belt' 
+          ? 'Parabéns! Você agora é um Black Belt. Vamos te mostrar como aproveitar todos os benefícios exclusivos.' 
+          : 'Você está na plataforma de blogs e afiliados mais completa. Vamos te mostrar como aproveitar ao máximo as ferramentas disponíveis.',
+        icon: <Rocket className="w-8 h-8 text-bloghouse-primary-600" />
+      },
+      {
+        id: 'wordpress-installer',
+        title: 'Instalador de WordPress 1-Click',
+        description: `Crie sites WordPress automaticamente em poucos cliques. ${
+          plan === 'starter' ? 'Você pode criar 1 site' : 
+          plan === 'pro' ? 'Você pode criar até 3 sites' : 
+          'Crie sites ilimitados'
+        }.`,
+        icon: <Globe className="w-8 h-8 text-blue-600" />,
+        action: {
+          label: 'Ver Instalador',
+          href: '/ferramentas'
+        }
+      },
+      {
+        id: 'content-generator',
+        title: plan === 'black_belt' ? 'Geração em Massa (CSV)' : 'Gerador de Reviews',
+        description: plan === 'black_belt' 
+          ? '🚀 Como Black Belt, você pode gerar dezenas de reviews de uma vez usando arquivos CSV. Seu diferencial competitivo!' 
+          : `Crie reviews automatizados para produtos Amazon. Você tem ${
+              plan === 'starter' ? '30 reviews por mês' : '100 reviews por mês'
+            }.`,
+        icon: <Award className="w-8 h-8 text-purple-600" />,
+        action: {
+          label: plan === 'black_belt' ? 'Ver Upload em Massa' : 'Gerar Primeira Review',
+          href: '/ferramentas'
+        }
       }
-    },
-    {
-      id: 'community',
-      title: 'Comunidade Ativa',
-      description: 'Conecte-se com outros profissionais de SEO, tire dúvidas, compartilhe experiências e aprenda com quem já está obtendo resultados.',
-      icon: <MessageCircle className="w-8 h-8 text-green-600" />,
-      action: {
-        label: 'Entrar na Comunidade',
-        href: '/comunidade'
-      }
-    },
-    {
-      id: 'content-generator',
-      title: 'Gerador de Conteúdo',
-      description: 'Crie reviews automatizados, artigos otimizados para SEO e conteúdo de alta qualidade usando nossa IA avançada.',
-      icon: <Award className="w-8 h-8 text-purple-600" />,
-      action: {
-        label: 'Gerar Primeiro Conteúdo',
-        href: '/ferramentas'
-      }
-    },
-    {
-      id: 'courses',
-      title: 'Cursos Completos',
-      description: 'Acesse nossos cursos estruturados de SEO, desde o básico até técnicas avançadas. Aprenda no seu ritmo com conteúdo prático.',
-      icon: <Play className="w-8 h-8 text-orange-600" />,
-      action: {
-        label: 'Ver Cursos',
-        href: '/cursos'
-      }
+    ];
+
+    // Add Black Belt exclusive steps
+    if (plan === 'black_belt') {
+      baseSteps.splice(2, 0, {
+        id: 'whatsapp-group',
+        title: '📱 Grupo WhatsApp Exclusivo',
+        description: 'Entre no grupo WhatsApp dos Black Belts! Networking diário, dicas exclusivas e suporte direto da comunidade.',
+        icon: <Phone className="w-8 h-8 text-green-600" />,
+        action: {
+          label: 'Entrar no Grupo',
+          onClick: () => window.open('https://chat.whatsapp.com/BvKGQhkPUxk1Q8X8vZXFHk', '_blank')
+        }
+      });
+      
+      baseSteps.push({
+        id: 'community',
+        title: 'Comunidade Exclusiva',
+        description: 'Acesse o chat privado dos Black Belts. Networking avançado, estratégias secretas e mentorias em grupo.',
+        icon: <MessageCircle className="w-8 h-8 text-yellow-600" />,
+        action: {
+          label: 'Entrar na Comunidade',
+          href: '/comunidade'
+        }
+      });
+
+      baseSteps.push({
+        id: 'courses',
+        title: 'Cursos Exclusivos',
+        description: 'Acesso completo a todos os cursos enquanto for Black Belt. Conteúdo premium de alto valor.',
+        icon: <Play className="w-8 h-8 text-orange-600" />,
+        action: {
+          label: 'Ver Cursos',
+          href: '/cursos'
+        }
+      });
+    } else {
+      // For starter/pro, show upgrade path
+      baseSteps.push({
+        id: 'upgrade',
+        title: 'Quer Mais? Vire Black Belt',
+        description: 'Geração em massa, comunidade exclusiva, cursos vitalícios e muito mais por apenas R$ 3.000 (12x no cartão).',
+        icon: <Award className="w-8 h-8 text-yellow-600" />,
+        action: {
+          label: 'Ver Black Belt',
+          href: '/pricing'
+        }
+      });
     }
-  ];
+
+    return baseSteps;
+  };
+
+  const steps = getStepsForPlan(userPlan);
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {

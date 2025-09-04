@@ -73,7 +73,7 @@ export const WordPressInstaller: React.FC<WordPressInstallerProps> = ({ onClose 
     
     try {
       // Start the installation directly on VPS
-      const response = await api.post('/sites/execute-installation', {
+      const response = await api.post('/api/sites/execute-installation', {
         templateId: selectedTemplate.id,
         templateUrl: selectedTemplate.downloadUrl,
         domain: config.domain,

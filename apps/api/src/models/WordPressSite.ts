@@ -9,6 +9,30 @@ export interface IWordPressSite extends Document {
   applicationPassword: string; // Encrypted
   isActive: boolean;
   isDefault: boolean;
+  // Site management fields (for VPS integration)
+  ipAddress?: string;
+  domain?: string;
+  siteType: 'managed' | 'external'; // managed = VPS managed, external = user added
+  vpsConfig?: {
+    host?: string;
+    port?: number;
+    username?: string;
+    hasAccess: boolean;
+  };
+  // WordPress info
+  wordpressVersion?: string;
+  phpVersion?: string;
+  installedPlugins?: Array<{
+    slug: string;
+    name: string;
+    version?: string;
+    isActive: boolean;
+  }>;
+  activeTheme?: {
+    slug: string;
+    name: string;
+    version?: string;
+  };
   testConnection?: {
     lastTest?: Date;
     status: 'connected' | 'failed' | 'pending';
@@ -62,6 +86,40 @@ const wordPressSiteSchema = new Schema<IWordPressSite>({
   isDefault: {
     type: Boolean,
     default: false
+  },
+  // Site management fields
+  ipAddress: String,
+  domain: String,
+  siteType: {
+    type: String,
+    enum: ['managed', 'external'],
+    default: 'external'
+  },
+  vpsConfig: {
+    host: String,
+    port: Number,
+    username: String,
+    hasAccess: {
+      type: Boolean,
+      default: false
+    }
+  },
+  // WordPress info
+  wordpressVersion: String,
+  phpVersion: String,
+  installedPlugins: [{
+    slug: String,
+    name: String,
+    version: String,
+    isActive: {
+      type: Boolean,
+      default: false
+    }
+  }],
+  activeTheme: {
+    slug: String,
+    name: String,
+    version: String
   },
   testConnection: {
     lastTest: Date,

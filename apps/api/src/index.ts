@@ -33,6 +33,7 @@ import featureRoutes from './routes/featureRoutes';
 import categoryRoutes from './routes/categoryRoutes';
 import reviewRoutes from './routes/review.routes';
 import promptRoutes from './routes/prompt.routes';
+import { usageRoutes } from './routes/usage.routes';
 import analyticsRoutes from './routes/admin/analytics.routes';
 import wordpressRoutes from './routes/wordpress.routes';
 import contentSettingsRoutes from './routes/contentSettings.routes';
@@ -41,6 +42,7 @@ import aiModelRoutes from './routes/aiModel.routes';
 import wordpressThemeRoutes from './routes/wordpressThemeRoutes';
 import wordpressPluginRoutes from './routes/wordpressPluginRoutes';
 import wordpressSiteRoutes from './routes/wordpressSiteRoutes';
+import callRoutes from './routes/call.routes';
 import { initializeSocketIO } from './socket';
 import { siteInstallationWorker } from './queues/siteInstallationQueue';
 import { getInstallationScript, reportInstallationProgress } from './controllers/siteInstallerController';
@@ -958,13 +960,15 @@ app.get('/api/suggestions/public', async (req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/2fa', twoFactorRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/usage', usageRoutes); // Usage tracking routes
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/uploads', uploadRouter); // New upload routes for thumbnails
-app.use('/api/sites', siteRoutes);
+app.use('/api/sites', siteRoutes); // Site management (main)
+app.use('/api/wordpress-sites', wordpressSiteRoutes); // WordPress site management via WordOps
 app.use('/api', statsRoutes); // Stats routes are under /api directly
 app.use('/api/user', userStatsRoutes); // User stats routes
 app.use('/api/users', discoveryRoutes); // User discovery routes
@@ -983,11 +987,11 @@ app.use('/api/admin/ai-models', aiModelRoutes); // AI model management routes
 app.use('/api/wordpress', wordpressRoutes); // WordPress sites management
 app.use('/api/wordpress-themes', wordpressThemeRoutes); // WordPress theme management
 app.use('/api/wordpress-plugins', wordpressPluginRoutes); // WordPress plugin management
-app.use('/api/sites', wordpressSiteRoutes); // WordPress site management
 app.use('/api/content-settings', contentSettingsRoutes); // Content generation settings
 app.use('/api/admin/settings', settingsRoutes); // Settings routes
 app.use('/api/admin/email-templates', emailTemplateRoutes); // Email template routes
 app.use('/api/admin/templates', adminTemplateRoutes); // WordPress template routes
+app.use('/api/calls', callRoutes); // Weekly calls management routes
 
 // Static files for uploads (in production, use CDN)
 app.use('/uploads', express.static('uploads'));

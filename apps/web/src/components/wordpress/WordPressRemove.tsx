@@ -69,7 +69,7 @@ export const WordPressRemove: React.FC<WordPressRemoveProps> = ({ onClose }) => 
     setIsRemoving(true);
     
     try {
-      const response = await api.post('/sites/remove-wordpress', {
+      const response = await api.post('/api/sites/remove-wordpress', {
         domain: formData.domain.trim().toLowerCase(),
         vpsConfig: {
           host: formData.vpsHost,

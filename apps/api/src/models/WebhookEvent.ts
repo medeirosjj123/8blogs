@@ -16,6 +16,9 @@ export interface IWebhookEvent extends Document {
   processingTimeMs?: number;
   createdAt: Date;
   updatedAt: Date;
+  canRetry: boolean;
+  markSuccess(responseCode: number, responseBody?: string, processingTimeMs?: number): Promise<this>;
+  markFailed(errorMessage: string, responseCode?: number, shouldRetry?: boolean): Promise<this>;
 }
 
 const WebhookEventSchema = new Schema<IWebhookEvent>(

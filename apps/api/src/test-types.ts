@@ -2,10 +2,12 @@ import { IUser, IApiResponse, UserRole } from '@tatame/types';
 
 // Test type imports
 const testUser: IUser = {
+  _id: '123',
   id: '123',
   email: 'test@example.com',
   name: 'Test User',
-  role: 'aluno' as UserRole,
+  role: 'user' as UserRole,
+  isVerified: false,
   status: 'active',
   createdAt: new Date(),
   updatedAt: new Date()

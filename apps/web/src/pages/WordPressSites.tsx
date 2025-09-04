@@ -22,49 +22,17 @@ import {
   Unlock,
   Edit,
   Copy,
-  Terminal
+  Terminal,
+  Rocket
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-
-interface WordPressSite {
-  _id: string;
-  domain: string;
-  ipAddress: string;
-  status: 'active' | 'inactive' | 'maintenance' | 'error';
-  sslStatus: 'active' | 'pending' | 'failed' | 'none';
-  lastCheck: Date;
-  wordpressVersion: string;
-  phpVersion: string;
-  themes: {
-    active: string;
-    total: number;
-  };
-  plugins: {
-    active: number;
-    total: number;
-    needsUpdate: number;
-  };
-  credentials: {
-    username: string;
-    password: string;
-  };
-  backups: {
-    last: Date;
-    count: number;
-  };
-  performance: {
-    loadTime: number;
-    uptime: number;
-  };
-  security: {
-    lastScan: Date;
-    issues: number;
-    firewall: boolean;
-  };
-  createdAt: Date;
-}
+import type { WordPressSite } from '../types/wp-site';
+import { AddExistingSiteModal } from '../components/modals/AddExistingSiteModal';
+import { SimpleWordPressInstaller } from '../components/installer/SimpleWordPressInstaller';
+import { UpgradePrompt } from '../components/UpgradePrompt';
+import { useUsage } from '../hooks/useUsage';
 
 export default function WordPressSites() {
   const [sites, setSites] = useState<WordPressSite[]>([]);
@@ -72,6 +40,18 @@ export default function WordPressSites() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedSite, setSelectedSite] = useState<WordPressSite | null>(null);
   const [showCredentials, setShowCredentials] = useState<Record<string, boolean>>({});
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showInstaller, setShowInstaller] = useState(false);
+  
+  // Usage hook for limit checking
+  const { 
+    usage, 
+    canAddBlog, 
+    showUpgradePromptFor, 
+    showUpgradePrompt, 
+    upgradePromptType,
+    handleUpgradePromptClose 
+  } = useUsage();
 
   useEffect(() => {
     fetchSites();
@@ -79,8 +59,8 @@ export default function WordPressSites() {
 
   const fetchSites = async () => {
     try {
-      const response = await api.get('/sites');
-      setSites(response.data.sites || []);
+      const response = await api.get('/api/wordpress/sites');
+      setSites(response.data.data || []);
     } catch (error) {
       toast.error('Erro ao carregar sites');
       console.error('Error fetching sites:', error);
@@ -92,7 +72,7 @@ export default function WordPressSites() {
   const refreshSiteStatus = async (siteId: string) => {
     setRefreshing(true);
     try {
-      await api.post(`/sites/${siteId}/refresh-status`);
+      await api.post(`/api/wordpress/sites/${siteId}/test`);
       toast.success('Status atualizado!');
       fetchSites();
     } catch (error) {
@@ -104,7 +84,12 @@ export default function WordPressSites() {
 
   const toggleSiteStatus = async (siteId: string) => {
     try {
-      await api.post(`/sites/${siteId}/toggle-status`);
+      const site = sites.find(s => s._id === siteId);
+      if (!site) return;
+      
+      await api.put(`/api/wordpress/sites/${siteId}`, {
+        isActive: !site.isActive
+      });
       toast.success('Status alterado!');
       fetchSites();
     } catch (error) {
@@ -115,17 +100,51 @@ export default function WordPressSites() {
   const createBackup = async (siteId: string) => {
     try {
       toast.loading('Criando backup...');
-      await api.post(`/sites/${siteId}/backup`);
-      toast.success('Backup criado com sucesso!');
-      fetchSites();
+      // This would need to be implemented in the WordPress controller
+      // For now, just show a message
+      toast.dismiss();
+      toast('Funcionalidade de backup será implementada em breve');
     } catch (error) {
       toast.error('Erro ao criar backup');
+    }
+  };
+
+  const deleteSite = async (siteId: string, siteName: string) => {
+    if (!confirm(`Tem certeza que deseja remover o site "${siteName}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    try {
+      await api.delete(`/api/wordpress/sites/${siteId}`);
+      toast.success('Site removido com sucesso!');
+      fetchSites(); // Refresh the list
+      setSelectedSite(null); // Close modal if open
+    } catch (error: any) {
+      console.error('Error deleting site:', error);
+      toast.error('Erro ao remover site');
     }
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('Copiado para a área de transferência!');
+  };
+
+  // Check if user can add a blog before opening modals
+  const handleAddExistingSite = () => {
+    if (!canAddBlog()) {
+      showUpgradePromptFor('blogs');
+      return;
+    }
+    setShowAddModal(true);
+  };
+
+  const handleCreateNewSite = () => {
+    if (!canAddBlog()) {
+      showUpgradePromptFor('blogs');
+      return;
+    }
+    setShowInstaller(true);
   };
 
   const toggleCredentials = (siteId: string) => {
@@ -135,33 +154,52 @@ export default function WordPressSites() {
     }));
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'active':
+  const getStatusIcon = (site: WordPressSite) => {
+    if (!site.isActive) {
+      return <Clock className="w-4 h-4 text-gray-500" />;
+    }
+    
+    const connectionStatus = site.testConnection?.status;
+    switch (connectionStatus) {
+      case 'connected':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'inactive':
-        return <Clock className="w-4 h-4 text-gray-500" />;
-      case 'maintenance':
-        return <Settings className="w-4 h-4 text-yellow-500" />;
-      case 'error':
+      case 'failed':
         return <AlertCircle className="w-4 h-4 text-red-500" />;
+      case 'pending':
       default:
-        return <Clock className="w-4 h-4 text-gray-500" />;
+        return <Clock className="w-4 h-4 text-yellow-500" />;
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'text-green-600 bg-green-50 border-green-200';
-      case 'inactive':
-        return 'text-gray-600 bg-gray-50 border-gray-200';
-      case 'maintenance':
-        return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-      case 'error':
-        return 'text-red-600 bg-red-50 border-red-200';
+  const getStatusText = (site: WordPressSite) => {
+    if (!site.isActive) return 'Inativo';
+    
+    const connectionStatus = site.testConnection?.status;
+    switch (connectionStatus) {
+      case 'connected':
+        return 'Conectado';
+      case 'failed':
+        return 'Erro';
+      case 'pending':
       default:
-        return 'text-gray-600 bg-gray-50 border-gray-200';
+        return 'Verificando';
+    }
+  };
+
+  const getStatusColor = (site: WordPressSite) => {
+    if (!site.isActive) {
+      return 'text-gray-600 bg-gray-50 border-gray-200';
+    }
+    
+    const connectionStatus = site.testConnection?.status;
+    switch (connectionStatus) {
+      case 'connected':
+        return 'text-green-600 bg-green-50 border-green-200';
+      case 'failed':
+        return 'text-red-600 bg-red-50 border-red-200';
+      case 'pending':
+      default:
+        return 'text-yellow-600 bg-yellow-50 border-yellow-200';
     }
   };
 
@@ -189,13 +227,20 @@ export default function WordPressSites() {
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             Atualizar
           </button>
-          <Link
-            to="/ferramentas"
-            className="flex items-center gap-2 px-4 py-2 bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
+          <button
+            onClick={handleAddExistingSite}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Novo Site
-          </Link>
+            Adicionar Blog Existente
+          </button>
+          <button
+            onClick={handleCreateNewSite}
+            className="flex items-center gap-2 px-4 py-2 bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
+          >
+            <Rocket className="w-4 h-4" />
+            Criar Novo Blog
+          </button>
         </div>
       </div>
 
@@ -204,15 +249,24 @@ export default function WordPressSites() {
           <Globe className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum site encontrado</h3>
           <p className="text-gray-600 mb-6">
-            Crie seu primeiro site WordPress para começar
+            Adicione um site existente ou crie um novo para começar
           </p>
-          <Link
-            to="/ferramentas"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Criar Primeiro Site
-          </Link>
+          <div className="flex justify-center gap-4">
+            <button
+              onClick={handleAddExistingSite}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              Adicionar Blog Existente
+            </button>
+            <button
+              onClick={handleCreateNewSite}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
+            >
+              <Rocket className="w-5 h-5" />
+              Criar Novo Blog
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -224,25 +278,28 @@ export default function WordPressSites() {
                   <div className="flex items-center gap-2">
                     <Globe className="w-5 h-5 text-gray-600" />
                     <h3 className="font-semibold text-gray-900 truncate">
-                      {site.domain}
+                      {site.name}
                     </h3>
+                    {site.siteType === 'managed' && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-xs font-semibold rounded-full">
+                        VPS
+                      </span>
+                    )}
                   </div>
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-medium ${getStatusColor(site.status)}`}>
-                    {getStatusIcon(site.status)}
-                    {site.status}
+                  <div className={`flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-medium ${getStatusColor(site)}`}>
+                    {getStatusIcon(site)}
+                    {getStatusText(site)}
                   </div>
                 </div>
                 
                 <div className="flex items-center gap-4 text-sm text-gray-600">
-                  <span>IP: {site.ipAddress}</span>
-                  <span className="flex items-center gap-1">
-                    {site.sslStatus === 'active' ? (
-                      <Lock className="w-3 h-3 text-green-500" />
-                    ) : (
-                      <Unlock className="w-3 h-3 text-gray-400" />
-                    )}
-                    SSL
-                  </span>
+                  <span className="truncate">{site.url.replace(/^https?:\/\//, '')}</span>
+                  {site.ipAddress && (
+                    <span className="flex items-center gap-1">
+                      <Server className="w-3 h-3" />
+                      {site.ipAddress}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -250,12 +307,16 @@ export default function WordPressSites() {
               <div className="p-4 border-b border-gray-100">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-coral">{site.performance?.uptime || 99}%</div>
-                    <div className="text-xs text-gray-600">Uptime</div>
+                    <div className="text-2xl font-bold text-coral">
+                      {site.statistics?.postsPublished || 0}
+                    </div>
+                    <div className="text-xs text-gray-600">Posts Publicados</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">{site.performance?.loadTime || 1.2}s</div>
-                    <div className="text-xs text-gray-600">Load Time</div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {site.testConnection?.status === 'connected' ? '✓' : site.testConnection?.status === 'failed' ? '✗' : '?'}
+                    </div>
+                    <div className="text-xs text-gray-600">WordPress API</div>
                   </div>
                 </div>
               </div>
@@ -265,23 +326,20 @@ export default function WordPressSites() {
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">WordPress:</span>
-                    <span className="font-medium">{site.wordpressVersion || '6.4'}</span>
+                    <span className="font-medium">{site.wordpressVersion || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">PHP:</span>
-                    <span className="font-medium">{site.phpVersion || '8.2'}</span>
+                    <span className="font-medium">{site.phpVersion || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Tema Ativo:</span>
-                    <span className="font-medium">{site.themes?.active || 'Twenty Twenty-Four'}</span>
+                    <span className="font-medium">{site.activeTheme?.name || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-600">Plugins:</span>
                     <span className="font-medium">
-                      {site.plugins?.active || 0}/{site.plugins?.total || 0}
-                      {(site.plugins?.needsUpdate || 0) > 0 && (
-                        <span className="ml-1 text-yellow-600">({site.plugins?.needsUpdate} updates)</span>
-                      )}
+                      {site.installedPlugins?.filter(p => p.isActive).length || 0}/{site.installedPlugins?.length || 0}
                     </span>
                   </div>
                 </div>
@@ -309,10 +367,10 @@ export default function WordPressSites() {
                       <span className="text-gray-600">Usuário:</span>
                       <div className="flex items-center gap-2">
                         <code className="bg-gray-100 px-2 py-1 rounded text-xs">
-                          {site.credentials?.username || 'admin'}
+                          {site.username}
                         </code>
                         <button
-                          onClick={() => copyToClipboard(site.credentials?.username || 'admin')}
+                          onClick={() => copyToClipboard(site.username)}
                           className="text-gray-400 hover:text-gray-600"
                         >
                           <Copy className="w-3 h-3" />
@@ -323,14 +381,11 @@ export default function WordPressSites() {
                       <span className="text-gray-600">Senha:</span>
                       <div className="flex items-center gap-2">
                         <code className="bg-gray-100 px-2 py-1 rounded text-xs">
-                          {site.credentials?.password || '••••••••'}
+                          ••••••••••••
                         </code>
-                        <button
-                          onClick={() => copyToClipboard(site.credentials?.password || '')}
-                          className="text-gray-400 hover:text-gray-600"
-                        >
-                          <Copy className="w-3 h-3" />
-                        </button>
+                        <span className="text-xs text-gray-500">
+                          (Application Password)
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -341,7 +396,7 @@ export default function WordPressSites() {
               <div className="p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <a
-                    href={`http://${site.ipAddress}`}
+                    href={site.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
@@ -350,7 +405,7 @@ export default function WordPressSites() {
                     Ver Site
                   </a>
                   <a
-                    href={`http://${site.ipAddress}/wp-admin`}
+                    href={`${site.url}/wp-admin`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
@@ -360,7 +415,7 @@ export default function WordPressSites() {
                   </a>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-4 gap-2">
                   <button
                     onClick={() => createBackup(site._id)}
                     className="flex items-center justify-center gap-1 px-2 py-2 text-xs bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors"
@@ -383,6 +438,13 @@ export default function WordPressSites() {
                     <Terminal className="w-3 h-3" />
                     Manage
                   </button>
+                  <button
+                    onClick={() => deleteSite(site._id, site.name)}
+                    className="flex items-center justify-center gap-1 px-2 py-2 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Delete
+                  </button>
                 </div>
               </div>
 
@@ -391,7 +453,7 @@ export default function WordPressSites() {
                 <div className="flex items-center justify-between text-xs text-gray-600">
                   <span>Criado em {new Date(site.createdAt).toLocaleDateString()}</span>
                   <span>
-                    Última verificação: {site.lastCheck ? new Date(site.lastCheck).toLocaleDateString() : 'Nunca'}
+                    Última verificação: {site.testConnection?.lastTest ? new Date(site.testConnection.lastTest).toLocaleDateString() : 'Nunca'}
                   </span>
                 </div>
               </div>
@@ -409,7 +471,7 @@ export default function WordPressSites() {
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                     <Globe className="w-6 h-6" />
-                    {selectedSite.domain}
+                    {selectedSite.name}
                   </h2>
                   <p className="text-gray-600">Gerenciar site WordPress</p>
                 </div>
@@ -433,19 +495,19 @@ export default function WordPressSites() {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status:</span>
-                      <span className={`font-medium ${getStatusColor(selectedSite.status)}`}>
-                        {selectedSite.status}
+                      <span className={`font-medium ${getStatusColor(selectedSite).split(' ')[0]}`}>
+                        {getStatusText(selectedSite)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">SSL:</span>
-                      <span className={`font-medium ${selectedSite.sslStatus === 'active' ? 'text-green-600' : 'text-gray-600'}`}>
-                        {selectedSite.sslStatus}
+                      <span className="text-gray-600">Tipo:</span>
+                      <span className="font-medium">
+                        {selectedSite.siteType === 'managed' ? 'VPS Gerenciado' : 'Site Externo'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Uptime:</span>
-                      <span className="font-medium">{selectedSite.performance?.uptime || 99}%</span>
+                      <span className="text-gray-600">Posts:</span>
+                      <span className="font-medium">{selectedSite.statistics?.postsPublished || 0}</span>
                     </div>
                   </div>
                 </div>
@@ -508,15 +570,15 @@ export default function WordPressSites() {
                 <button
                   onClick={() => toggleSiteStatus(selectedSite._id)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                    selectedSite.status === 'active' 
+                    selectedSite.isActive 
                       ? 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100' 
                       : 'bg-green-50 text-green-600 hover:bg-green-100'
                   }`}
                 >
-                  {selectedSite.status === 'active' ? (
+                  {selectedSite.isActive ? (
                     <>
                       <EyeOff className="w-4 h-4" />
-                      Colocar em Manutenção
+                      Desativar Site
                     </>
                   ) : (
                     <>
@@ -543,7 +605,7 @@ export default function WordPressSites() {
                 </button>
                 
                 <a
-                  href={`http://${selectedSite.ipAddress}/wp-admin`}
+                  href={`${selectedSite.url}/wp-admin`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 px-4 py-2 bg-coral-50 text-coral rounded-lg hover:bg-coral-100 transition-colors"
@@ -556,6 +618,53 @@ export default function WordPressSites() {
           </div>
         </div>
       )}
+
+      {/* Add Existing Site Modal */}
+      <AddExistingSiteModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSiteAdded={fetchSites}
+      />
+
+      {/* WordPress Installer Modal */}
+      {showInstaller && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowInstaller(false);
+            }
+          }}
+        >
+          <div className="min-h-full flex items-center justify-center p-4">
+            <div className="w-full max-w-7xl">
+              <SimpleWordPressInstaller 
+                onClose={() => {
+                  setShowInstaller(false);
+                  fetchSites(); // Refresh sites after installation
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Existing Site Modal */}
+      <AddExistingSiteModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSiteAdded={fetchSites}
+      />
+
+      {/* Upgrade Prompt */}
+      <UpgradePrompt
+        isOpen={showUpgradePrompt}
+        onClose={handleUpgradePromptClose}
+        limitType={upgradePromptType}
+        currentPlan={usage?.plan || 'starter'}
+        used={usage?.usage?.blogs?.used || 0}
+        limit={usage?.usage?.blogs?.limit || 1}
+      />
     </div>
   );
 }

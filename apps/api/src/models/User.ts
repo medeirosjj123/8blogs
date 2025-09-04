@@ -25,6 +25,21 @@ export interface IUserDocument extends Omit<IUser, 'id'>, Document {
     weeklyDigest: boolean;
     marketingEmails: boolean;
   };
+  // Subscription fields
+  subscription?: {
+    plan: 'starter' | 'pro' | 'premium';
+    blogsLimit: number;
+    reviewsLimit: number;
+    reviewsUsed: number;
+    billingCycle: 'monthly' | 'yearly';
+    nextResetDate: Date;
+    features: {
+      bulkUpload: boolean;
+      weeklyCalls: boolean;
+      coursesAccess: boolean;
+      prioritySupport: boolean;
+    };
+  };
   // Networking fields
   abilities?: string[];
   interests?: string[];
@@ -89,8 +104,8 @@ const userSchema = new Schema<IUserDocument>({
   },
   role: {
     type: String,
-    enum: ['aluno', 'mentor', 'moderador', 'admin'],
-    default: 'aluno'
+    enum: ['starter', 'pro', 'black_belt', 'admin'],
+    default: 'starter'
   },
   membership: {
     type: {
@@ -116,6 +131,58 @@ const userSchema = new Schema<IUserDocument>({
     language: {
       type: String,
       default: 'pt-BR'
+    }
+  },
+  subscription: {
+    plan: {
+      type: String,
+      enum: ['starter', 'pro', 'black_belt'],
+      default: 'starter'
+    },
+    blogsLimit: {
+      type: Number,
+      default: 1 // Starter plan limit
+    },
+    reviewsLimit: {
+      type: Number,
+      default: 30 // Starter: 30, Pro: 100, Black Belt: unlimited (-1)
+    },
+    reviewsUsed: {
+      type: Number,
+      default: 0
+    },
+    billingCycle: {
+      type: String,
+      enum: ['monthly', 'yearly'],
+      default: 'monthly'
+    },
+    nextResetDate: {
+      type: Date,
+      default: () => {
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        nextMonth.setDate(1);
+        nextMonth.setHours(0, 0, 0, 0);
+        return nextMonth;
+      }
+    },
+    features: {
+      bulkUpload: {
+        type: Boolean,
+        default: false // Only Black Belt has bulk generation
+      },
+      weeklyCalls: {
+        type: Boolean,
+        default: false
+      },
+      coursesAccess: {
+        type: Boolean,
+        default: false // Only Black Belt has access
+      },
+      prioritySupport: {
+        type: Boolean,
+        default: false
+      }
     }
   },
   magicLinkToken: {

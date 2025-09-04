@@ -31,6 +31,7 @@ const navigation = [
   { name: 'Categorias', href: '/admin/categories', icon: Folder },
   { name: 'Content Generation Hub', href: '/admin/content-hub', icon: Cpu },
   { name: 'Templates WordPress', href: '/admin/templates', icon: Layout },
+  { name: 'Chamadas Semanais', href: '/admin/calls', icon: Activity },
   { name: 'Sugestões de Perfil', href: '/admin/profile-suggestions', icon: List },
   { name: 'Templates de Email', href: '/admin/email-templates', icon: Mail },
   { name: 'Configurações', href: '/admin/settings', icon: Settings },

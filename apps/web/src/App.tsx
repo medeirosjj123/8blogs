@@ -21,7 +21,10 @@ import { Notifications } from './pages/Notifications';
 import { Discover } from './pages/Discover';
 import { UserProfile } from './pages/UserProfile';
 import { ProfileNetworking } from './pages/ProfileNetworking';
+import Pricing from './pages/Pricing';
+import { WeeklyCalls } from './pages/WeeklyCalls';
 import LessonView from './pages/LessonView';
+import { BlogsDashboard } from './pages/BlogsDashboard';
 import { AdminRoute } from './components/AdminRoute';
 import { AdminLayout } from './components/AdminLayout';
 import AdminDashboard from './pages/admin/Dashboard';
@@ -45,6 +48,7 @@ import { ContentGenerationHub } from './pages/admin/ContentGenerationHub';
 import WordPressManagement from './pages/admin/WordPressManagement';
 import ThemeManagement from './pages/admin/ThemeManagement';
 import PluginManagement from './pages/admin/PluginManagement';
+import AdminWeeklyCalls from './pages/admin/WeeklyCalls';
 import WordPressSites from './pages/WordPressSites';
 
 // Create a client
@@ -67,6 +71,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/auth/magic-link" element={<MagicLinkAuth />} />
+            <Route path="/precos" element={<Pricing />} />
             
             {/* Lesson Routes (Full Screen - No Layout) */}
             <Route path="/courses/:courseId/modules/:moduleId/lessons/:lessonId" element={
@@ -100,6 +105,7 @@ function App() {
               <Route path="wordpress" element={<WordPressManagement />} />
               <Route path="wordpress/themes" element={<ThemeManagement />} />
               <Route path="wordpress/plugins" element={<PluginManagement />} />
+              <Route path="calls" element={<AdminWeeklyCalls />} />
               <Route path="settings" element={<AdminSettings />} />
               <Route path="email-templates" element={<AdminEmailTemplates />} />
             </Route>
@@ -111,6 +117,7 @@ function App() {
               </PrivateRoute>
             }>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/meus-sites" element={<WordPressSites />} />
               <Route path="/cursos" element={<Courses />} />
               <Route path="/course/:courseId" element={<Course />} />
               <Route path="/comunidade" element={<Community />} />
@@ -123,7 +130,9 @@ function App() {
               <Route path="/profile/security" element={<Security />} />
               <Route path="/profile/notifications" element={<ProfileNotifications />} />
               <Route path="/notifications" element={<Notifications />} />
-              <Route path="/meus-sites" element={<WordPressSites />} />
+              <Route path="/chamadas" element={<WeeklyCalls />} />
+              {/* Legacy route redirect */}
+              <Route path="/blogs" element={<Navigate to="/meus-sites" replace />} />
             </Route>
 
             {/* Fallback */}

@@ -58,7 +58,7 @@ export const ContentAnalytics: React.FC = () => {
   const { data: stats, isLoading } = useQuery<ContentStats>({
     queryKey: ['content-analytics', dateRange],
     queryFn: async () => {
-      const response = await api.get(`/admin/analytics/content?days=${dateRange}`);
+      const response = await api.get('/api/admin/analytics/content?days=${dateRange}');
       return response.data.data;
     }
   });

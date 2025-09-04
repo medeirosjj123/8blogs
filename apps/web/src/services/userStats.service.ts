@@ -37,13 +37,13 @@ export interface UserActivity {
 
 class UserStatsService {
   async getStats(): Promise<{ stats: UserStats; achievements: Achievement[]; memberSince: Date; lastActive: Date }> {
-    const response = await api.get<IApiResponse<any>>('/user/stats');
+    const response = await api.get<IApiResponse<any>>('/api/user/stats');
     return response.data.data!;
   }
 
   async getActivity(limit = 20, offset = 0): Promise<{ activities: UserActivity[]; hasMore: boolean }> {
     const response = await api.get<IApiResponse<any>>(
-      `/user/activity?limit=${limit}&offset=${offset}`
+      `/api/user/activity?limit=${limit}&offset=${offset}`
     );
     return response.data.data!;
   }
@@ -52,7 +52,7 @@ class UserStatsService {
     const formData = new FormData();
     formData.append('avatar', file);
     
-    const response = await api.post<IApiResponse<{ avatar: string; user: any }>>('/auth/avatar', formData, {
+    const response = await api.post<IApiResponse<{ avatar: string; user: any }>>('/api/auth/avatar', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -61,7 +61,7 @@ class UserStatsService {
   }
 
   async deleteAvatar(): Promise<void> {
-    await api.delete('/auth/avatar');
+    await api.delete('/api/auth/avatar');
   }
 }
 

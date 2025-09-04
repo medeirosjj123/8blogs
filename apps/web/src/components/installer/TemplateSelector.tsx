@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Check, ExternalLink, Eye, Download, Rocket, Globe, TrendingUp, BarChart, AlertCircle } from 'lucide-react';
+import { Check, ExternalLink, Eye, Download, Rocket, Globe, TrendingUp, BarChart, AlertCircle, Crown } from 'lucide-react';
 import type { WordPressTemplate } from '../../types/installer';
 import api from '../../services/api';
+import { useUsage } from '../../hooks/useUsage';
 
 interface TemplateSelectorProps {
   selectedTemplate: WordPressTemplate | null;
@@ -12,6 +13,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
   selectedTemplate,
   onSelectTemplate
 }) => {
+  const { usage } = useUsage();
   const [activeCategory, setActiveCategory] = useState('all');
   const [templates, setTemplates] = useState<WordPressTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,7 +25,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
       try {
         setIsLoading(true);
         setError(null);
-        const response = await api.get('/sites/templates');
+        const response = await api.get('/api/sites/templates');
         
         // Transform API response to match frontend interface
         const apiTemplates = response.data.templates || [];
@@ -38,7 +40,9 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
           features: template.features || ['SEO Otimizado', 'Responsivo', 'Rápido'],
           seoScore: template.seoScore || 90,
           performanceScore: template.performanceScore || 90,
-          difficulty: template.difficulty || 'beginner'
+          difficulty: template.difficulty || 'beginner',
+          requiredPlan: template.requiredPlan || 'starter',
+          isPremium: template.isPremium || false
         }));
         
         setTemplates(transformedTemplates);
@@ -60,9 +64,68 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
     { id: 'business', name: 'Negócios', icon: Rocket },
   ];
 
+  // Helper function to check if user has access to template
+  const hasTemplateAccess = (template: WordPressTemplate, userPlan: string) => {
+    const planHierarchy = { 'starter': 1, 'pro': 2, 'black_belt': 3 };
+    const requiredLevel = planHierarchy[template.requiredPlan as keyof typeof planHierarchy] || 1;
+    const userLevel = planHierarchy[userPlan as keyof typeof planHierarchy] || 1;
+    return userLevel >= requiredLevel;
+  };
+
+  // Create mock templates based on user plan since API might not have plan restrictions yet
+  const getMockTemplates = (userPlan: string): WordPressTemplate[] => {
+    const basicTemplate: WordPressTemplate = {
+      id: 'basic-blog',
+      name: 'Blog Básico',
+      description: 'Template simples e otimizado para blogs de afiliados',
+      category: 'blog',
+      demoUrl: '#',
+      thumbnailUrl: 'https://via.placeholder.com/400x300/3b82f6/ffffff?text=Blog+Básico',
+      downloadUrl: '#',
+      features: ['SEO Básico', 'Responsivo', 'Rápido'],
+      seoScore: 85,
+      performanceScore: 90,
+      difficulty: 'beginner',
+      requiredPlan: 'starter',
+      isPremium: false
+    };
+
+    if (userPlan === 'black_belt') {
+      // Black Belt gets 10 premium templates
+      return [
+        basicTemplate,
+        ...Array.from({ length: 9 }, (_, i) => ({
+          id: `premium-${i + 1}`,
+          name: `Premium Template ${i + 1}`,
+          description: `Template premium exclusivo para Black Belts com design profissional`,
+          category: ['blog', 'affiliate', 'business'][i % 3],
+          demoUrl: '#',
+          thumbnailUrl: `https://via.placeholder.com/400x300/f59e0b/ffffff?text=Premium+${i + 1}`,
+          downloadUrl: '#',
+          features: ['SEO Avançado', 'Conversão Otimizada', 'Design Premium', 'Suporte Prioritário'],
+          seoScore: 95 + Math.floor(Math.random() * 5),
+          performanceScore: 90 + Math.floor(Math.random() * 10),
+          difficulty: ['intermediate', 'advanced'][Math.floor(Math.random() * 2)] as any,
+          requiredPlan: 'black_belt' as any,
+          isPremium: true
+        }))
+      ];
+    } else {
+      // Starter/Pro only get the basic template
+      return [basicTemplate];
+    }
+  };
+
+  // Use mock templates for now (you can replace this with API templates when ready)
+  const availableTemplates = usage?.plan ? getMockTemplates(usage.plan) : [getMockTemplates('starter')[0]];
+
+  // Filter by category and user access
   const filteredTemplates = activeCategory === 'all' 
-    ? templates 
-    : templates.filter(template => template.category === activeCategory);
+    ? availableTemplates.filter(template => hasTemplateAccess(template, usage?.plan || 'starter'))
+    : availableTemplates.filter(template => 
+        template.category === activeCategory && 
+        hasTemplateAccess(template, usage?.plan || 'starter')
+      );
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -208,6 +271,14 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
               <div className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(template.difficulty)}`}>
                 {getDifficultyLabel(template.difficulty)}
               </div>
+
+              {/* Premium Badge for Black Belt templates */}
+              {template.isPremium && (
+                <div className="absolute top-3 right-3 px-2 py-1 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-full text-xs font-medium flex items-center gap-1">
+                  <Crown className="w-3 h-3" />
+                  Black Belt
+                </div>
+              )}
             </div>
 
             {/* Template Info */}
@@ -260,6 +331,28 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Black Belt Upgrade Prompt for lower tier users */}
+      {usage?.plan !== 'black_belt' && (
+        <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200 rounded-xl p-6 text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Crown className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 mb-3">
+            Quer Mais Templates Premium?
+          </h3>
+          <p className="text-gray-700 mb-4">
+            Black Belts têm acesso a <strong>10 templates premium exclusivos</strong> com designs profissionais, 
+            conversão otimizada e suporte prioritário.
+          </p>
+          <button
+            onClick={() => window.location.href = '/pricing'}
+            className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-semibold px-6 py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
+          >
+            Virar Black Belt - R$ 3.000
+          </button>
+        </div>
+      )}
 
       {filteredTemplates.length === 0 && (
         <div className="text-center py-12">

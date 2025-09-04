@@ -292,22 +292,96 @@ export async function getUserSites(req: AuthRequest, res: Response): Promise<voi
       return;
     }
     
-    const sites = await Site.find({ userId })
-      .sort({ createdAt: -1 })
-      .limit(20);
+    // Get both regular sites and installations (existing blogs)
+    logger.info('Fetching user sites', { userId });
+    
+    const [sites, existingConnections, completedInstallations] = await Promise.all([
+      Site.find({ userId }).sort({ createdAt: -1 }).limit(10),
+      Installation.find({ 
+        userId,
+        'installationOptions.isExisting': true,
+        status: 'completed'
+      }).sort({ createdAt: -1 }).limit(10),
+      Installation.find({ 
+        userId,
+        'installationOptions.isExisting': { $ne: true },
+        status: 'completed'
+      }).sort({ createdAt: -1 }).limit(10)
+    ]);
+    
+    logger.info('Query results', {
+      sitesCount: sites.length,
+      existingConnectionsCount: existingConnections.length,
+      completedInstallationsCount: completedInstallations.length,
+      existingConnections: existingConnections.map(inst => ({
+        id: inst._id,
+        domain: inst.domain,
+        status: inst.status
+      })),
+      completedInstallations: completedInstallations.map(inst => ({
+        id: inst._id,
+        domain: inst.domain,
+        status: inst.status
+      }))
+    });
+    
+    // Convert regular sites to blog format
+    const blogSites = sites.map(site => ({
+      _id: site._id,
+      name: site.templateName || site.domain,
+      url: `https://${site.domain}`,
+      domain: site.domain,
+      status: site.status === 'active' ? 'active' : 'error',
+      healthStatus: site.sslStatus === 'active' ? 'good' : 'warning',
+      wordpress: {
+        version: 'Unknown',
+        pluginsNeedUpdate: 0,
+        sslActive: site.sslStatus === 'active'
+      },
+      createdAt: site.createdAt
+    }));
+    
+    // Convert existing WordPress connections to blog format
+    const existingBlogs = existingConnections.map(installation => ({
+      _id: installation._id,
+      name: installation.installationOptions?.siteName || installation.domain,
+      url: installation.siteInfo?.accessUrl || `https://${installation.domain}`,
+      domain: installation.domain,
+      status: 'active' as const,
+      healthStatus: 'good' as const,
+      googleAnalyticsId: installation.installationOptions?.googleAnalyticsId,
+      wordpress: {
+        version: 'Unknown',
+        pluginsNeedUpdate: 0,
+        sslActive: true
+      },
+      createdAt: installation.createdAt
+    }));
+    
+    // Convert completed new installations to blog format
+    const completedBlogs = completedInstallations.map(installation => ({
+      _id: installation._id,
+      name: installation.installationOptions?.siteName || installation.domain,
+      url: installation.siteInfo?.accessUrl || `https://${installation.domain}`,
+      domain: installation.domain,
+      status: 'active' as const,
+      healthStatus: 'good' as const,
+      googleAnalyticsId: installation.installationOptions?.googleAnalyticsId,
+      wordpress: {
+        version: 'Unknown',
+        pluginsNeedUpdate: 0,
+        sslActive: true
+      },
+      createdAt: installation.createdAt
+    }));
+    
+    // Combine all sources and sort by creation date
+    const allBlogs = [...blogSites, ...existingBlogs, ...completedBlogs]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 20);
     
     res.json({
-      sites: sites.map(site => ({
-        id: site._id,
-        domain: site.domain,
-        ipAddress: site.ipAddress,
-        templateName: site.templateName,
-        status: site.status,
-        sslStatus: site.sslStatus,
-        dnsStatus: site.dnsStatus,
-        provisionedAt: site.provisionedAt,
-        createdAt: site.createdAt
-      }))
+      sites: allBlogs
     });
   } catch (error) {
     logger.error({ error }, 'Error fetching user sites');
@@ -387,7 +461,7 @@ export async function generateInstallationCommand(req: AuthRequest, res: Respons
   try {
     const userId = req.user?.userId;
     const userEmail = req.user?.email; // Get user email from JWT
-    const { templateId, domain } = req.body;
+    const { templateId, domain, options = {} } = req.body;
     
     if (!userId || !userEmail) {
       res.status(401).json({
@@ -553,22 +627,22 @@ export async function getInstallationScript(req: Request, res: Response): Promis
     try {
       const io = global.socketIO;
       if (io) {
-        io.to(`user:${installData.userId}`).emit('installation:started', {
+        io.to(`user:${installation.userId}`).emit('installation:started', {
           token: token.substring(0, 8) + '...',
-          templateId: installData.templateId,
-          domain: installData.domain,
+          templateId: installation.templateId,
+          domain: installation.domain,
           timestamp: new Date().toISOString()
         });
         
-        logger.info({ userId: installData.userId }, 'Installation started event emitted');
+        logger.info({ userId: installation.userId }, 'Installation started event emitted');
       }
     } catch (socketError) {
       logger.warn({ error: socketError }, 'Failed to emit installation started event');
     }
     
     logger.info({ 
-      userId: installData.userId,
-      templateId: installData.templateId,
+      userId: installation.userId,
+      templateId: installation.templateId,
       token: token.substring(0, 8) + '...'
     }, 'Installation script served');
     
@@ -1387,3 +1461,289 @@ export async function backupWordPress(req: any, res: any): Promise<void> {
     });
   }
 }
+
+/**
+ * Detect if a URL is a WordPress site
+ */
+export async function detectWordPressSite(req: AuthRequest, res: Response): Promise<void> {
+  const { url } = req.body;
+  
+  if (!url) {
+    res.status(400).json({
+      success: false,
+      message: 'URL é obrigatória'
+    });
+    return;
+  }
+
+  try {
+    // Normalize URL
+    const normalizedUrl = url.replace(/\/$/, '');
+    
+    let isWordPress = false;
+    let title = '';
+    let version = '';
+    let restApiEnabled = false;
+    
+    // Try to fetch the main page
+    try {
+      const response = await fetch(normalizedUrl, {
+        headers: { 'User-Agent': '8blogs/1.0' },
+      });
+      
+      if (response.ok) {
+        const html = await response.text();
+        
+        // Check for WordPress generator meta tag
+        const generatorMatch = html.match(/<meta name="generator" content="WordPress ([^"]+)"/i);
+        if (generatorMatch) {
+          isWordPress = true;
+          version = generatorMatch[1];
+        }
+        
+        // Check for WordPress-specific strings
+        if (html.includes('wp-content') || html.includes('wp-includes')) {
+          isWordPress = true;
+        }
+        
+        // Extract title
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+        if (titleMatch) {
+          title = titleMatch[1].trim();
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to fetch main page:', error);
+    }
+    
+    // Try to check REST API
+    try {
+      const restResponse = await fetch(`${normalizedUrl}/wp-json/wp/v2/`);
+      
+      if (restResponse.ok) {
+        isWordPress = true;
+        restApiEnabled = true;
+        
+        // Try to get site info from REST API
+        try {
+          const siteResponse = await fetch(`${normalizedUrl}/wp-json/`);
+          
+          if (siteResponse.ok) {
+            const siteData = await siteResponse.json();
+            if (siteData.name && !title) {
+              title = siteData.name;
+            }
+            if (siteData.gmt_offset !== undefined) {
+              isWordPress = true;
+            }
+          }
+        } catch (error) {
+          logger.warn('Failed to get site info from REST API:', error);
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to check REST API:', error);
+    }
+    
+    // Check if this site is already registered by this user (only if it's WordPress)
+    if (isWordPress) {
+      const userId = req.user?.userId;
+      if (userId) {
+        const hostname = new URL(normalizedUrl).hostname;
+        const existingSite = await Installation.findOne({
+          userId: userId, // Only check for this user's installations
+          $or: [
+            { domain: hostname },
+            { 'siteInfo.accessUrl': normalizedUrl }
+          ]
+        });
+        
+        if (existingSite) {
+          res.status(400).json({
+            success: false,
+            message: 'Este blog já está registrado na plataforma'
+          });
+          return;
+        }
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        isWordPress,
+        title: title || 'Site detectado',
+        version: version || 'Desconhecida',
+        restApiEnabled,
+        url: normalizedUrl
+      }
+    });
+  } catch (error) {
+    logger.error('WordPress detection error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao verificar site'
+    });
+  }
+}
+
+/**
+ * Add existing WordPress site to user's dashboard
+ */
+export async function addExistingSite(req: AuthRequest, res: Response): Promise<void> {
+  const userId = req.user?.userId;
+  const { name, url, username, applicationPassword, googleAnalyticsId } = req.body;
+  
+  logger.info('addExistingSite called', {
+    userId,
+    url,
+    name,
+    username: username ? '***' : undefined,
+    hasPassword: !!applicationPassword
+  });
+  
+  if (!userId) {
+    res.status(401).json({
+      success: false,
+      message: 'Usuário não autenticado'
+    });
+    return;
+  }
+  
+  if (!name || !url || !username || !applicationPassword) {
+    res.status(400).json({
+      success: false,
+      message: 'Todos os campos são obrigatórios'
+    });
+    return;
+  }
+
+  try {
+    const normalizedUrl = url.replace(/\/$/, '');
+    const hostname = new URL(normalizedUrl).hostname;
+    
+    // Check if this EXISTING WordPress site is already connected by this user
+    logger.info('Checking for existing WordPress connection', {
+      userId,
+      hostname,
+      normalizedUrl
+    });
+    
+    const existingSite = await Installation.findOne({
+      userId: userId, // Only check for this user's installations
+      'installationOptions.isExisting': true, // Only check existing WordPress connections
+      status: 'completed', // Only check completed connections
+      $or: [
+        { domain: hostname },
+        { 'siteInfo.accessUrl': normalizedUrl }
+      ]
+    });
+    
+    logger.info('Database query result', {
+      existingSite: existingSite ? {
+        id: existingSite._id,
+        domain: existingSite.domain,
+        userId: existingSite.userId
+      } : null
+    });
+    
+    if (existingSite) {
+      logger.warn('Existing site found - blocking registration', {
+        existingSite: {
+          id: existingSite._id,
+          domain: existingSite.domain,
+          status: existingSite.status,
+          isExisting: existingSite.installationOptions?.isExisting,
+          createdAt: existingSite.createdAt
+        }
+      });
+      res.status(400).json({
+        success: false,
+        message: 'Este blog já está registrado na plataforma'
+      });
+      return;
+    }
+    
+    // Test WordPress connection
+    try {
+      const authString = Buffer.from(`${username}:${applicationPassword}`).toString('base64');
+      const testResponse = await fetch(`${normalizedUrl}/wp-json/wp/v2/users/me`, {
+        headers: {
+          'Authorization': `Basic ${authString}`,
+          'User-Agent': '8blogs/1.0'
+        }
+      });
+      
+      if (!testResponse.ok) {
+        res.status(400).json({
+          success: false,
+          message: 'Falha na autenticação. Verifique suas credenciais.'
+        });
+        return;
+      }
+    } catch (error) {
+      logger.error('WordPress connection test failed:', error);
+      res.status(400).json({
+        success: false,
+        message: 'Não foi possível conectar ao WordPress. Verifique as credenciais.'
+      });
+      return;
+    }
+    
+    // Create Installation record for existing site
+    const installation = new Installation({
+      userId,
+      userEmail: req.user?.email || 'unknown@example.com', // Add userEmail field
+      domain: new URL(normalizedUrl).hostname,
+      status: 'completed',
+      templateId: 'existing-wordpress',
+      templateName: 'Existing WordPress Blog',
+      vpsHost: 'external',
+      installToken: 'existing-' + crypto.randomBytes(16).toString('hex'),
+      tokenUsed: true,
+      expiresAt: new Date(), // Already expired since it's not needed
+      siteInfo: {
+        domain: new URL(normalizedUrl).hostname,
+        ipAddress: 'external',
+        accessUrl: normalizedUrl,
+        adminUrl: `${normalizedUrl}/wp-admin`
+      },
+      credentials: {
+        siteUrl: normalizedUrl,
+        adminUrl: `${normalizedUrl}/wp-admin`,
+        username,
+        password: applicationPassword // This is the application password
+      },
+      installationOptions: {
+        siteName: name,
+        isExisting: true,
+        googleAnalyticsId: googleAnalyticsId || undefined
+      },
+      steps: [], // No steps needed for existing sites
+      logs: [], // No logs needed for existing sites
+      startedAt: new Date(),
+      completedAt: new Date(),
+      createdAt: new Date()
+    });
+    
+    await installation.save();
+    
+    res.json({
+      success: true,
+      message: 'Blog adicionado com sucesso!',
+      data: {
+        installationId: installation._id,
+        domain: installation.domain,
+        url: normalizedUrl,
+        adminUrl: `${normalizedUrl}/wp-admin`
+      }
+    });
+  } catch (error) {
+    logger.error('Add existing site error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao adicionar blog'
+    });
+  }
+}
+

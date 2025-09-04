@@ -62,7 +62,7 @@ export const ChannelSettings: React.FC<ChannelSettingsProps> = ({
     
     setIsLoading(true);
     try {
-      const response = await api.get(`/chat/channels/${channel._id || channel.id}/members`);
+      const response = await api.get(`/api/chat/channels/${channel._id || channel.id}/members`);
       setMembers(response.data.members || []);
     } catch (error) {
       console.error('Error fetching members:', error);
@@ -77,7 +77,7 @@ export const ChannelSettings: React.FC<ChannelSettingsProps> = ({
     
     setIsUpdating(true);
     try {
-      await api.put(`/chat/channels/${channel._id || channel.id}`, {
+      await api.put(`/api/chat/channels/${channel._id || channel.id}`, {
         name: editedChannel.name,
         description: editedChannel.description
       });
@@ -101,7 +101,7 @@ export const ChannelSettings: React.FC<ChannelSettingsProps> = ({
     
     setIsUpdating(true);
     try {
-      await api.delete(`/chat/channels/${channel._id || channel.id}`);
+      await api.delete(`/api/chat/channels/${channel._id || channel.id}`);
       toast.success('Canal excluído com sucesso');
       onChannelDelete?.();
       onClose();
@@ -136,7 +136,7 @@ export const ChannelSettings: React.FC<ChannelSettingsProps> = ({
     }
     
     try {
-      await api.delete(`/chat/channels/${channel._id || channel.id}/members/${memberId}`);
+      await api.delete(`/api/chat/channels/${channel._id || channel.id}/members/${memberId}`);
       toast.success('Membro removido com sucesso');
       fetchMembers();
     } catch (error) {
@@ -149,7 +149,7 @@ export const ChannelSettings: React.FC<ChannelSettingsProps> = ({
     if (!channel) return;
     
     try {
-      await api.put(`/chat/channels/${channel._id || channel.id}/members/${memberId}`, {
+      await api.put(`/api/chat/channels/${channel._id || channel.id}/members/${memberId}`, {
         role: newRole
       });
       toast.success('Permissão atualizada com sucesso');

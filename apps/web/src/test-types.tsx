@@ -3,10 +3,12 @@ import type { IUser, UserRole, IApiResponse } from '@tatame/types';
 // Test type imports in frontend
 const TestComponent = () => {
   const user: IUser = {
+    _id: '456',
     id: '456',
     email: 'frontend@example.com',
     name: 'Frontend User',
     role: 'admin' as UserRole,
+    isVerified: false,
     status: 'active',
     createdAt: new Date(),
     updatedAt: new Date()

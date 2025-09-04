@@ -68,7 +68,7 @@ export const AiSettings: React.FC = () => {
 
   const fetchSettings = async () => {
     try {
-      const response = await api.get('/admin/ai-settings');
+      const response = await api.get('/api/admin/ai-settings');
       if (response.data.success) {
         setSettings(response.data.data.settings);
         setAvailableModels(response.data.data.availableModels);
@@ -84,7 +84,7 @@ export const AiSettings: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const response = await api.put('/admin/ai-settings', settings);
+      const response = await api.put('/api/admin/ai-settings', settings);
       if (response.data.success) {
         toast.success('Configurações de IA atualizadas com sucesso!');
         setSettings(response.data.data);

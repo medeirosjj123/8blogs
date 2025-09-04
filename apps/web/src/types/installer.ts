@@ -1,3 +1,4 @@
+// WordPress Template interface
 export interface WordPressTemplate {
   id: string;
   name: string;
@@ -10,8 +11,11 @@ export interface WordPressTemplate {
   seoScore: number;
   performanceScore: number;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
+  requiredPlan?: 'starter' | 'pro' | 'black_belt';
+  isPremium?: boolean;
 }
 
+// Installation Step interface
 export interface InstallationStep {
   id: string;
   title: string;
@@ -19,6 +23,7 @@ export interface InstallationStep {
   status: 'pending' | 'active' | 'completed' | 'error';
 }
 
+// Installation Job interface
 export interface InstallationJob {
   id: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
@@ -27,3 +32,5 @@ export interface InstallationJob {
   startedAt?: Date;
   completedAt?: Date;
 }
+
+// Note: WordPressSite interface moved to ../types/wordpress.types.ts

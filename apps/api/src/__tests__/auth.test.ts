@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { hashPassword, comparePassword, validatePassword, validateEmail } from '../utils/auth';
 
 describe('Auth Utils', () => {

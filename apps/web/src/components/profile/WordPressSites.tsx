@@ -56,7 +56,7 @@ export default function WordPressSites() {
     queryFn: async () => {
       console.log('Fetching WordPress sites...');
       try {
-        const response = await api.get('/wordpress/sites');
+        const response = await api.get('/api/wordpress/sites');
         console.log('WordPress sites response:', response.data);
         return response.data.data;
       } catch (err) {
@@ -70,10 +70,10 @@ export default function WordPressSites() {
   const saveMutation = useMutation({
     mutationFn: async (data: any) => {
       if (editingSite) {
-        const response = await api.put(`/wordpress/sites/${editingSite._id}`, data);
+        const response = await api.put('/api/wordpress/sites/${editingSite._id}', data);
         return response.data;
       } else {
-        const response = await api.post('/wordpress/sites', data);
+        const response = await api.post('/api/wordpress/sites', data);
         return response.data;
       }
     },
@@ -90,7 +90,7 @@ export default function WordPressSites() {
   // Delete site mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await api.delete(`/wordpress/sites/${id}`);
+      const response = await api.delete('/api/wordpress/sites/${id}');
       return response.data;
     },
     onSuccess: () => {
@@ -102,7 +102,7 @@ export default function WordPressSites() {
   // Test connection mutation
   const testMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await api.post(`/wordpress/sites/${id}/test`);
+      const response = await api.post('/api/wordpress/sites/${id}/test');
       return response.data;
     },
     onSuccess: (data) => {
@@ -117,7 +117,7 @@ export default function WordPressSites() {
   // Set default site mutation
   const setDefaultMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await api.post(`/wordpress/sites/${id}/set-default`);
+      const response = await api.post('/api/wordpress/sites/${id}/set-default');
       return response.data;
     },
     onSuccess: () => {

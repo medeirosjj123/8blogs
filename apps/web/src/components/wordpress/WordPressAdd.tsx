@@ -73,7 +73,7 @@ export const WordPressAdd: React.FC<WordPressAddProps> = ({ onClose }) => {
       cleanDomain = cleanDomain.replace(/^www\./, '');
       cleanDomain = cleanDomain.replace(/\/$/, '');
       
-      const response = await api.post('/sites/add-wordpress', {
+      const response = await api.post('/api/sites/add-wordpress', {
         domain: cleanDomain,
         vpsConfig: {
           host: formData.vpsHost,

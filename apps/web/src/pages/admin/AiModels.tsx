@@ -51,7 +51,7 @@ export const AiModels: React.FC = () => {
 
   const fetchModels = async () => {
     try {
-      const response = await api.get('/admin/ai-models');
+      const response = await api.get('/api/admin/ai-models');
       if (response.data.success) {
         setModels(response.data.data);
       }
@@ -69,7 +69,7 @@ export const AiModels: React.FC = () => {
     try {
       if (editingModel) {
         // Update existing model
-        const response = await api.put(`/admin/ai-models/${editingModel._id}`, formData);
+        const response = await api.put('/api/admin/ai-models/${editingModel._id}', formData);
         if (response.data.success) {
           toast.success('Modelo atualizado com sucesso!');
           fetchModels();
@@ -77,7 +77,7 @@ export const AiModels: React.FC = () => {
         }
       } else {
         // Create new model
-        const response = await api.post('/admin/ai-models', formData);
+        const response = await api.post('/api/admin/ai-models', formData);
         if (response.data.success) {
           toast.success('Modelo criado com sucesso!');
           fetchModels();
@@ -94,7 +94,7 @@ export const AiModels: React.FC = () => {
     if (!confirm('Tem certeza que deseja excluir este modelo?')) return;
     
     try {
-      const response = await api.delete(`/admin/ai-models/${id}`);
+      const response = await api.delete('/api/admin/ai-models/${id}');
       if (response.data.success) {
         toast.success('Modelo excluído com sucesso!');
         fetchModels();
@@ -107,7 +107,7 @@ export const AiModels: React.FC = () => {
 
   const handleToggleStatus = async (id: string) => {
     try {
-      const response = await api.post(`/admin/ai-models/${id}/toggle-status`);
+      const response = await api.post('/api/admin/ai-models/${id}/toggle-status');
       if (response.data.success) {
         toast.success(response.data.message);
         fetchModels();
@@ -120,7 +120,7 @@ export const AiModels: React.FC = () => {
 
   const handleSetPrimary = async (id: string) => {
     try {
-      const response = await api.post(`/admin/ai-models/${id}/set-primary`);
+      const response = await api.post('/api/admin/ai-models/${id}/set-primary');
       if (response.data.success) {
         toast.success('Modelo definido como primário!');
         fetchModels();
@@ -133,7 +133,7 @@ export const AiModels: React.FC = () => {
 
   const handleSetFallback = async (id: string) => {
     try {
-      const response = await api.post(`/admin/ai-models/${id}/set-fallback`);
+      const response = await api.post('/api/admin/ai-models/${id}/set-fallback');
       if (response.data.success) {
         toast.success('Modelo definido como fallback!');
         fetchModels();

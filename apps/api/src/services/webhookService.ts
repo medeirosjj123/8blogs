@@ -145,7 +145,7 @@ class WebhookService {
         });
       }
       
-      res.status(200).json({ received: true, error: 'Processing error' });
+      return res.status(200).json({ received: true, error: 'Processing error' });
     }
   }
 
@@ -217,6 +217,8 @@ class WebhookService {
       }
     }
     
+    if (!timestamp) return false;
+    
     const signedPayload = `${timestamp}.${payload}`;
     const expectedSignature = crypto
       .createHmac('sha256', secret)
@@ -274,7 +276,7 @@ class WebhookService {
   // Send a webhook (for testing or retries)
   async sendWebhook(
     webhook: IWebhookConfig,
-    eventType: string,
+    _eventType: string,
     payload: any
   ): Promise<any> {
     try {

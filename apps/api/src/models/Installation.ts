@@ -67,6 +67,9 @@ export interface IInstallationDocument extends Document {
     enableCaching?: boolean;
     enableSecurity?: boolean;
     installPlugins?: boolean;
+    siteName?: string;
+    isExisting?: boolean;
+    googleAnalyticsId?: string;
     wordpressConfig?: {
       credentials?: {
         siteTitle: string;
@@ -240,6 +243,9 @@ const installationSchema = new Schema<IInstallationDocument>({
     enableCaching: { type: Boolean, default: true },
     enableSecurity: { type: Boolean, default: true },
     installPlugins: { type: Boolean, default: true },
+    siteName: String,
+    isExisting: { type: Boolean, default: false },
+    googleAnalyticsId: String,
     wordpressConfig: {
       credentials: {
         siteTitle: String,

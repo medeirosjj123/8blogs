@@ -12,7 +12,6 @@ import toast from 'react-hot-toast';
 import { useUserStats, useUpdateProfile } from '../hooks/useUserStats';
 import { AvatarUpload } from '../components/profile/AvatarUpload';
 import { ActivityTimeline } from '../components/profile/ActivityTimeline';
-import WordPressSites from '../components/profile/WordPressSites';
 import ContentSettings from '../components/profile/ContentSettings';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -521,14 +520,20 @@ export const Profile: React.FC = () => {
                   <h2 className="text-xl font-bold text-gray-900 mb-6">Configurações de Ferramentas</h2>
                   <p className="text-gray-600 mb-8">Configure suas credenciais para usar as ferramentas de criação de conteúdo.</p>
                   
-                  {/* WordPress Sites Section */}
+                  {/* WordPress Sites Section - Moved to /blogs */}
                   <div className="mb-8">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                       <Globe className="w-5 h-5 text-coral" />
                       Sites WordPress
                     </h3>
-                    <p className="text-sm text-gray-600 mb-4">Adicione seus sites WordPress para publicar conteúdo automaticamente.</p>
-                    <WordPressSites />
+                    <p className="text-sm text-gray-600 mb-4">Gerencie seus blogs WordPress de forma visual e intuitiva.</p>
+                    <Link 
+                      to="/blogs"
+                      className="inline-flex items-center gap-2 bg-coral text-white px-6 py-3 rounded-lg hover:bg-coral-dark transition-colors font-medium"
+                    >
+                      <Globe className="w-4 h-4" />
+                      Gerenciar Meus Blogs
+                    </Link>
                   </div>
 
                   {/* Pexels API Section */}

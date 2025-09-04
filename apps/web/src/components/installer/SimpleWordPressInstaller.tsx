@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { InstallationStep } from '../../types/installer';
+import { UpgradePrompt } from '../UpgradePrompt';
+import { useUsage } from '../../hooks/useUsage';
 
 interface SimpleWordPressInstallerProps {
   onClose: () => void;
@@ -62,6 +64,15 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
   const [installationId, setInstallationId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [installationSuccess, setInstallationSuccess] = useState<InstallationSuccess | null>(null);
+  
+  // Usage hook for upgrade prompt
+  const { 
+    usage,
+    showUpgradePrompt,
+    upgradePromptType,
+    handleUpgradePromptClose,
+    showUpgradePromptFor
+  } = useUsage();
 
   const steps: InstallationStep[] = [
     {
@@ -152,7 +163,7 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
     
     try {
       // Start the installation with WordPress credentials, theme, and plugins
-      const response = await api.post('/sites/execute-installation', {
+      const response = await api.post('/api/sites/execute-installation', {
         domain: config.domain,
         vpsConfig: {
           host: config.vpsHost,
@@ -183,7 +194,7 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
     }
   };
 
-  const handleInstallationComplete = React.useCallback((success: boolean, data?: any) => {
+  const handleInstallationComplete = React.useCallback(async (success: boolean, data?: any) => {
     console.log('🎉 Installation completion callback:', { success, data });
     console.log('🔍 Current step before completion:', currentStep);
     console.log('🔍 Installation success state before:', installationSuccess);
@@ -237,6 +248,41 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
       console.log('✅ Setting installation success data:', completionData);
       setInstallationSuccess(completionData);
       console.log('📍 Installation complete - waiting for user to continue');
+      
+      // Auto-register the new site in the database
+      try {
+        console.log('🔄 Auto-registering site in database...');
+        const registerResponse = await api.post('/api/wordpress/sites', {
+          name: wpCredentials?.siteTitle || domain || 'Novo Site',
+          url: siteUrl,
+          username: finalUsername,
+          applicationPassword: finalPassword,
+          siteType: 'managed',
+          vpsConfig: {
+            host: installationConfig?.vpsHost,
+            port: installationConfig?.vpsPort || 22,
+            username: installationConfig?.vpsUsername,
+            hasAccess: true
+          }
+        });
+        
+        if (registerResponse.data.success) {
+          console.log('✅ Site registered successfully in database');
+        } else {
+          console.warn('⚠️ Site registration failed:', registerResponse.data.message);
+          // If it's a blog limit error, show upgrade prompt
+          if (registerResponse.data.limitInfo) {
+            showUpgradePromptFor('blogs');
+          }
+        }
+      } catch (error: any) {
+        console.error('❌ Error auto-registering site:', error);
+        // If it's a blog limit error, show upgrade prompt
+        if (error.response?.status === 429 && error.response?.data?.limitInfo) {
+          showUpgradePromptFor('blogs');
+        }
+        // Don't show other errors to user - this is background operation
+      }
       
       // Show success toast but don't auto-advance
       toast.success('WordPress instalado com sucesso! Clique em "Continuar" para ver os detalhes.');
@@ -735,6 +781,16 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
           </div>
         </div>
       )}
+
+      {/* Upgrade Prompt */}
+      <UpgradePrompt
+        isOpen={showUpgradePrompt}
+        onClose={handleUpgradePromptClose}
+        limitType={upgradePromptType}
+        currentPlan={usage?.plan || 'starter'}
+        used={usage?.usage?.blogs?.used || 0}
+        limit={usage?.usage?.blogs?.limit || 1}
+      />
     </div>
   );
 };

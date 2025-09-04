@@ -1,5 +1,5 @@
 class NotificationService {
-  private permission: NotificationPermission = 'default';
+  private _permission: NotificationPermission = 'default';
   private mutedChannels: Set<string> = new Set();
 
   constructor() {
@@ -9,7 +9,7 @@ class NotificationService {
 
   private async init() {
     if ('Notification' in window) {
-      this.permission = Notification.permission;
+      this._permission = Notification.permission;
     }
   }
 
@@ -41,7 +41,7 @@ class NotificationService {
 
     if (Notification.permission !== 'denied') {
       const permission = await Notification.requestPermission();
-      this.permission = permission;
+      this._permission = permission;
       return permission === 'granted';
     }
 

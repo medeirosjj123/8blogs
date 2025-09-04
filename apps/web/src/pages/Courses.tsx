@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, Users, TrendingUp, Search, Filter, Loader2, BookOpen, ChevronRight } from 'lucide-react';
+import { Clock, Users, TrendingUp, Search, Filter, Loader2, BookOpen, ChevronRight, Lock } from 'lucide-react';
 import { useCourses } from '../hooks/useCourses';
+import { useUsage } from '../hooks/useUsage';
+import { UpgradePrompt } from '../components/UpgradePrompt';
 
 export const Courses: React.FC = () => {
   const navigate = useNavigate();
@@ -9,6 +11,8 @@ export const Courses: React.FC = () => {
   const [selectedLevel, setSelectedLevel] = useState<string>('all');
   
   const { data: courses, isLoading, error } = useCourses();
+  const { usage } = useUsage();
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   
   // Debug logging
   React.useEffect(() => {
@@ -30,6 +34,24 @@ export const Courses: React.FC = () => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
+  };
+
+  const handleCourseClick = (course: any) => {
+    // Check if course is locked
+    if (course.isLocked) {
+      return;
+    }
+
+    // Check if user is Black Belt (required for course access)
+    const isBlackBelt = usage?.plan === 'black_belt';
+    
+    if (!isBlackBelt) {
+      setShowUpgradePrompt(true);
+      return;
+    }
+
+    // User has access, navigate to course
+    navigate(`/course/${course.id}`);
   };
 
   const filteredCourses = courses?.filter(course => {
@@ -77,6 +99,29 @@ export const Courses: React.FC = () => {
         <p className="text-slate-600">
           Evolua suas habilidades e conquiste sua graduação no mundo do SEO
         </p>
+        
+        {/* Black Belt Access Banner */}
+        {usage?.plan !== 'black_belt' && (
+          <div className="mt-6 bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200 rounded-2xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-xl flex items-center justify-center">
+                <Lock className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-yellow-900">Exclusivo para Black Belts</h3>
+                <p className="text-sm text-yellow-700">
+                  Os cursos são exclusivos para membros Black Belt ativos. Mantenha sua assinatura para continuar aprendendo.
+                </p>
+              </div>
+              <button
+                onClick={() => window.location.href = '/pricing'}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white font-medium px-6 py-2 rounded-xl transition-colors"
+              >
+                Virar Black Belt
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -146,7 +191,7 @@ export const Courses: React.FC = () => {
               className={`group bg-white rounded-2xl overflow-hidden shadow-soft hover:shadow-medium transition-all duration-300 cursor-pointer ${
                 course.isLocked ? 'opacity-75' : ''
               }`}
-              onClick={() => !course.isLocked && navigate(`/course/${course.id}`)}
+              onClick={() => handleCourseClick(course)}
             >
               {/* Course Image */}
               <div className="relative h-48 overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
@@ -176,6 +221,15 @@ export const Courses: React.FC = () => {
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                     <div className="bg-white/90 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-medium text-slate-700">
                       🔒 Bloqueado
+                    </div>
+                  </div>
+                )}
+                
+                {!course.isLocked && usage?.plan !== 'black_belt' && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-yellow-500/40 to-transparent flex items-center justify-center">
+                    <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-full px-4 py-2 text-sm font-medium flex items-center gap-2">
+                      <Lock size={14} />
+                      Black Belt
                     </div>
                   </div>
                 )}
@@ -262,6 +316,20 @@ export const Courses: React.FC = () => {
           </p>
         </div>
       )}
+
+      {/* Upgrade Prompt for Course Access */}
+      <UpgradePrompt
+        isOpen={showUpgradePrompt}
+        onClose={() => setShowUpgradePrompt(false)}
+        limitType="blogs" // Use blogs as generic limit type
+        currentPlan={usage?.plan || 'starter'}
+        used={0}
+        limit={1}
+        onUpgrade={() => {
+          navigate('/precos');
+          setShowUpgradePrompt(false);
+        }}
+      />
     </div>
   );
 };

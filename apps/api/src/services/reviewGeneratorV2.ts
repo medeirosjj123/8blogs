@@ -35,12 +35,27 @@ export class ReviewGeneratorV2 {
     this.contextHistory = []; // Reset context for new generation
     this.fullContentAccumulator = []; // Reset full content accumulator
     
+    console.log(`\n🤖 [AI-SERVICE] Starting content generation`);
+    console.log(`  Title: "${input.title}"`);
+    console.log(`  Content Type: ${input.contentType}`);
+    console.log(`  User ID: ${input.userId}`);
     
     // Initialize AI service if needed
     await aiService.initialize();
 
     // Load prompts from database based on content type
     const prompts = await this.loadPrompts(input.contentType);
+    
+    console.log(`📝 [PROMPTS] Loaded prompts for ${input.contentType}:`);
+    if (input.contentType === 'bbr' || input.contentType === 'spr') {
+      console.log(`  Intro Prompt: ${prompts.intro?.code || 'NOT FOUND'}`);
+      console.log(`  Product Prompt: ${prompts.product?.code || 'NOT FOUND'}`);
+      console.log(`  Conclusion Prompt: ${prompts.conclusion?.code || 'NOT FOUND'}`);
+    } else {
+      console.log(`  Content Intro: ${prompts.content_intro?.code || 'NOT FOUND'}`);
+      console.log(`  Content Section: ${prompts.content_section?.code || 'NOT FOUND'}`);
+      console.log(`  Content Conclusion: ${prompts.content_conclusion?.code || 'NOT FOUND'}`);
+    }
     
     if (input.contentType === 'bbr' || input.contentType === 'spr') {
       if (!prompts.intro || !prompts.product || !prompts.conclusion) {
@@ -71,9 +86,22 @@ export class ReviewGeneratorV2 {
     let model = '';
 
     // 1. Generate introduction based on TITLE
-    console.log('📝 Generating introduction based on title...');
+    console.log(`\n🔥 [INTRO] Generating introduction section`);
+    console.log(`  Using prompt: ${prompts.intro.code}`);
+    console.log(`  Title: "${input.title}"`);
+    console.log(`  Product count: ${input.products?.length || 0}`);
+    
     const introResult = await this.generateIntroduction(prompts.intro, input.title, input.products?.length || 0);
-    console.log('📋 Introduction result:', introResult.content.substring(0, 200) + '...');
+    
+    console.log(`✅ [INTRO] Generated successfully`);
+    console.log(`  Characters: ${introResult.content.length}`);
+    console.log(`  Words: ~${introResult.content.split(' ').length}`);
+    console.log(`  AI Provider: ${introResult.provider}`);
+    console.log(`  AI Model: ${introResult.model}`);
+    console.log(`  Tokens: input=${introResult.usage.input}, output=${introResult.usage.output}, total=${introResult.usage.total}`);
+    console.log(`  Cost: $${introResult.cost.toFixed(4)}`);
+    console.log(`  Preview: "${introResult.content.substring(0, 150)}..."`);
+    
     this.updateContext(introResult.content); // Add to context history
     this.addToFullContent('Introdução', introResult.content); // Add to full content
     
@@ -116,13 +144,20 @@ export class ReviewGeneratorV2 {
     }
 
     // 3. Generate product reviews (with context from intro + outlines)
-    console.log('📦 Generating product reviews with context...');
+    console.log(`\n📦 [PRODUCTS] Starting product reviews generation`);
+    console.log(`  Total products: ${input.products!.length}`);
+    console.log(`  Using prompt: ${prompts.product.code}`);
+    
     const productReviews: ReviewPart[] = [];
     const reviewTexts: string[] = [];
     
     for (let i = 0; i < input.products!.length; i++) {
       const product = input.products![i];
-      console.log(`  - Reviewing product ${i + 1}/${input.products!.length}: ${product.name}`);
+      console.log(`\n🛍️ [PRODUCT ${i + 1}] Generating review`);
+      console.log(`  Product name: "${product.name}"`);
+      console.log(`  Affiliate link: ${product.affiliateLink}`);
+      console.log(`  Image URL: ${product.imageUrl || 'None'}`);
+      console.log(`  Context available: ${this.contextHistory.length} sections`);
       
       const reviewResult = await this.generateProductReviewSection(
         prompts.product,
@@ -132,7 +167,15 @@ export class ReviewGeneratorV2 {
         input.products!.length
       );
       
-      console.log('📋 Raw AI response for "' + product.name + '":', reviewResult.content);
+      console.log(`✅ [PRODUCT ${i + 1}] Generated successfully`);
+      console.log(`  Characters: ${reviewResult.content.length}`);
+      console.log(`  Words: ~${reviewResult.content.split(' ').length}`);
+      console.log(`  AI Provider: ${reviewResult.provider}`);
+      console.log(`  AI Model: ${reviewResult.model}`);
+      console.log(`  Tokens: input=${reviewResult.usage.input}, output=${reviewResult.usage.output}, total=${reviewResult.usage.total}`);
+      console.log(`  Cost: $${reviewResult.cost.toFixed(4)}`);
+      console.log(`  Preview: "${reviewResult.content.substring(0, 100)}..."`);
+      
       const parsed = this.parseProductReview(reviewResult.content, input.contentType);
       console.log('📋 Parsed result for "' + product.name + '":', parsed);
       productReviews.push(parsed);
@@ -147,7 +190,11 @@ export class ReviewGeneratorV2 {
     }
 
     // 4. Generate conclusion (with title and full content)
-    console.log('✍️ Generating conclusion...');
+    console.log(`\n📝 [CONCLUSION] Generating conclusion section`);
+    console.log(`  Using prompt: ${prompts.conclusion.code}`);
+    console.log(`  Full content available: ${this.getFullContent().length} characters`);
+    console.log(`  Products to conclude: ${input.products!.length}`);
+    
     const conclusionResult = await this.generateConclusion(
       prompts.conclusion,
       input.title,
@@ -155,7 +202,15 @@ export class ReviewGeneratorV2 {
       introResult.content,
       this.getFullContent()
     );
-    console.log('📋 Conclusion result:', conclusionResult.content.substring(0, 200) + '...');
+    
+    console.log(`✅ [CONCLUSION] Generated successfully`);
+    console.log(`  Characters: ${conclusionResult.content.length}`);
+    console.log(`  Words: ~${conclusionResult.content.split(' ').length}`);
+    console.log(`  AI Provider: ${conclusionResult.provider}`);
+    console.log(`  AI Model: ${conclusionResult.model}`);
+    console.log(`  Tokens: input=${conclusionResult.usage.input}, output=${conclusionResult.usage.output}, total=${conclusionResult.usage.total}`);
+    console.log(`  Cost: $${conclusionResult.cost.toFixed(4)}`);
+    console.log(`  Preview: "${conclusionResult.content.substring(0, 150)}..."`);;
     
     totalTokens.input += conclusionResult.usage.input;
     totalTokens.output += conclusionResult.usage.output;
@@ -203,7 +258,8 @@ export class ReviewGeneratorV2 {
         introduction: introResult.content,
         reviews: [...outlineSections, ...reviewTexts], // Outlines first, then products
         conclusion: conclusionResult.content,
-        fullHtml
+        fullHtml,
+        wordCount: this.calculateWordCount(fullHtml) // Calculate word count from HTML content
       },
       metadata: {
         model,
@@ -219,14 +275,28 @@ export class ReviewGeneratorV2 {
 
     await review.save();
     
-    console.log(`✅ Product review generated successfully in ${review.metadata.generationTime}s`);
-    console.log(`   - Provider: ${provider} (${model})`);
-    console.log(`   - Tokens: ${totalTokens.total}`);
-    console.log(`   - Cost: $${totalCost.toFixed(4)}`);
+    const generationTime = (Date.now() - this.startTime) / 1000;
+    
+    console.log(`\n🎉 [REVIEW] Generation completed successfully!`);
+    console.log(`  MongoDB ID: ${review._id}`);
+    console.log(`  Collection: reviews`);
+    console.log(`  Slug: ${review.slug}`);
+    console.log(`  Title: "${review.title}"`);
+    console.log(`  Content Type: ${review.contentType}`);
+    console.log(`  Status: ${review.status}`);
+    console.log(`  Generation Time: ${generationTime}s`);
+    console.log(`  AI Provider: ${provider}`);
+    console.log(`  AI Model: ${model}`);
+    console.log(`  Total Tokens: ${totalTokens.total} (input: ${totalTokens.input}, output: ${totalTokens.output})`);
+    console.log(`  Total Cost: $${totalCost.toFixed(4)}`);
+    console.log(`  Word Count: ${review.content?.wordCount || 'N/A'}`);
     if (outlineSections.length > 0) {
-      console.log(`   - Outline sections: ${outlineSections.length}`);
+      console.log(`  Outline Sections: ${outlineSections.length}`);
     }
-    console.log(`   - Product reviews: ${products.length}`);
+    console.log(`  Product Reviews: ${products.length}`);
+    console.log(`  Content Sections: Introduction + ${products.length} Products + Conclusion`);
+    console.log(`  Created At: ${new Date().toISOString()}`);
+    console.log(`🎉 [REVIEW] Ready for use!\n`);
     
     return review;
   }
@@ -494,6 +564,26 @@ export class ReviewGeneratorV2 {
     });
 
     return aiService.generateContent(compiledPrompt);
+  }
+
+  private calculateWordCount(html: string): number {
+    try {
+      if (!html || typeof html !== 'string') {
+        console.log('⚠️ Word count calculation: HTML is empty or invalid');
+        return 0;
+      }
+      
+      // Remove HTML tags and calculate word count
+      const cleanText = html.replace(/<[^>]*>/g, '');
+      const words = cleanText.trim().split(/\s+/);
+      const wordCount = words.length;
+      
+      console.log(`📊 Word count calculated: ${wordCount} words from ${html.length} characters`);
+      return wordCount;
+    } catch (error) {
+      console.error('❌ Error calculating word count:', error);
+      return 0;
+    }
   }
 
   private parseProductReview(content: string, contentType: 'bbr' | 'spr' | 'informational' = 'bbr'): ReviewPart {

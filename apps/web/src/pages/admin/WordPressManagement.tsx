@@ -63,8 +63,8 @@ export default function WordPressManagement() {
       
       // Fetch stats and recent items in parallel
       const [themesRes, pluginsRes] = await Promise.all([
-        api.get('/wordpress-themes'),
-        api.get('/wordpress-plugins')
+        api.get('/api/wordpress-themes'),
+        api.get('/api/wordpress-plugins')
       ]);
 
       const themes = themesRes.data.data?.themes || [];
@@ -112,7 +112,7 @@ export default function WordPressManagement() {
       const endpoint = item.type === 'theme' ? 'wordpress-themes' : 'wordpress-plugins';
       const toggleEndpoint = action === 'active' ? 'toggle-active' : 'toggle-default';
       
-      await api.post(`/${endpoint}/${item._id}/${toggleEndpoint}`);
+      await api.post('/api/${endpoint}/${item._id}/${toggleEndpoint}');
       
       const actionText = action === 'active' 
         ? (item.isActive ? 'desativado' : 'ativado')

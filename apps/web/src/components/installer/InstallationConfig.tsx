@@ -102,7 +102,7 @@ export const InstallationConfig: React.FC<InstallationConfigProps> = ({
     setTestMessage('');
 
     try {
-      const response = await api.post('/sites/test-vps', {
+      const response = await api.post('/api/sites/test-vps', {
         host: vpsHost,
         port: vpsPort,
         username: vpsUsername,

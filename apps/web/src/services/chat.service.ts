@@ -4,12 +4,12 @@ import type { Message, Channel } from './socket.service';
 
 class ChatService {
   async getChannels(): Promise<Channel[]> {
-    const response = await api.get<any>('/chat/channels');
+    const response = await api.get<any>('/api/chat/channels');
     return response.data.channels || [];
   }
 
   async getChannel(channelId: string): Promise<Channel> {
-    const response = await api.get<IApiResponse<Channel>>(`/chat/channels/${channelId}`);
+    const response = await api.get<IApiResponse<Channel>>(`/api/chat/channels/${channelId}`);
     return response.data.data!;
   }
 
@@ -18,16 +18,16 @@ class ChatService {
     description?: string;
     type: 'public' | 'private';
   }): Promise<Channel> {
-    const response = await api.post<IApiResponse<Channel>>('/chat/channels', data);
+    const response = await api.post<IApiResponse<Channel>>('/api/chat/channels', data);
     return response.data.data!;
   }
 
   async joinChannel(channelId: string): Promise<void> {
-    await api.post(`/chat/channels/${channelId}/join`);
+    await api.post(`/api/chat/channels/${channelId}/join`);
   }
 
   async leaveChannel(channelId: string): Promise<void> {
-    await api.post(`/chat/channels/${channelId}/leave`);
+    await api.post(`/api/chat/channels/${channelId}/leave`);
   }
 
   async getMessages(channelId: string, limit = 30, before?: string): Promise<{ messages: Message[], hasMore: boolean }> {
@@ -37,7 +37,7 @@ class ChatService {
     if (before) params.append('before', before);
     
     const response = await api.get<any>(
-      `/chat/channels/${channelId}/messages?${params.toString()}`
+      `/api/chat/channels/${channelId}/messages?${params.toString()}`
     );
     
     // Map the backend response to match frontend Message type
@@ -65,7 +65,7 @@ class ChatService {
 
   async sendMessage(channelId: string, content: string, type: 'text' | 'image' | 'file' = 'text'): Promise<Message> {
     const response = await api.post<IApiResponse<Message>>(
-      `/chat/channels/${channelId}/messages`,
+      `/api/chat/channels/${channelId}/messages`,
       { content, type }
     );
     return response.data.data!;
@@ -73,14 +73,14 @@ class ChatService {
 
   async editMessage(messageId: string, content: string): Promise<Message> {
     const response = await api.put<IApiResponse<Message>>(
-      `/chat/messages/${messageId}`,
+      `/api/chat/messages/${messageId}`,
       { content }
     );
     return response.data.data!;
   }
 
   async deleteMessage(messageId: string): Promise<void> {
-    await api.delete(`/chat/messages/${messageId}`);
+    await api.delete(`/api/chat/messages/${messageId}`);
   }
 
   async uploadFile(file: File): Promise<{ url: string; type: string; size: number }> {
@@ -88,7 +88,7 @@ class ChatService {
     formData.append('file', file);
     
     const response = await api.post<IApiResponse<{ url: string; type: string; size: number }>>(
-      '/chat/upload',
+      '/api/chat/upload',
       formData,
       {
         headers: {
@@ -100,7 +100,7 @@ class ChatService {
   }
 
   async getDirectChannel(userId: string): Promise<Channel> {
-    const response = await api.get<IApiResponse<Channel>>(`/chat/direct/${userId}`);
+    const response = await api.get<IApiResponse<Channel>>(`/api/chat/direct/${userId}`);
     return response.data.data!;
   }
 
@@ -110,7 +110,7 @@ class ChatService {
     if (channelId) params.append('channelId', channelId);
     
     const response = await api.get<IApiResponse<Message[]>>(
-      `/chat/messages/search?${params.toString()}`
+      `/api/chat/messages/search?${params.toString()}`
     );
     return response.data.data || [];
   }
@@ -122,7 +122,7 @@ class ChatService {
     avatar?: string;
     isOnline: boolean;
   }>> {
-    const response = await api.get<any>('/chat/users');
+    const response = await api.get<any>('/api/chat/users');
     return response.data.users || [];
   }
 
@@ -138,20 +138,20 @@ class ChatService {
       avatar?: string;
     };
   }> {
-    const response = await api.get<any>(`/chat/direct/${targetUserId}`);
+    const response = await api.get<any>(`/api/chat/direct/${targetUserId}`);
     return response.data.channel;
   }
 
   async pinMessage(messageId: string): Promise<void> {
-    await api.post(`/chat/messages/${messageId}/pin`);
+    await api.post(`/api/chat/messages/${messageId}/pin`);
   }
 
   async unpinMessage(messageId: string): Promise<void> {
-    await api.delete(`/chat/messages/${messageId}/pin`);
+    await api.delete(`/api/chat/messages/${messageId}/pin`);
   }
 
   async getPinnedMessages(channelId: string): Promise<Message[]> {
-    const response = await api.get<any>(`/chat/channels/${channelId}/pinned`);
+    const response = await api.get<any>(`/api/chat/channels/${channelId}/pinned`);
     const messages = response.data.pinnedMessages || [];
     
     return messages.map((msg: any) => ({

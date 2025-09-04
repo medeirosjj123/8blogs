@@ -85,7 +85,7 @@ export default function ThemeManagement() {
 
   const fetchThemes = async () => {
     try {
-      const response = await api.get('/wordpress-themes');
+      const response = await api.get('/api/wordpress-themes');
       setThemes(response.data.data.themes || []);
     } catch (error) {
       toast.error('Erro ao carregar temas');
@@ -162,10 +162,10 @@ export default function ThemeManagement() {
       };
 
       if (editingTheme) {
-        await api.put(`/wordpress-themes/${editingTheme._id}`, payload);
+        await api.put('/api/wordpress-themes/${editingTheme._id}', payload);
         toast.success('Tema atualizado com sucesso!');
       } else {
-        await api.post('/wordpress-themes', payload);
+        await api.post('/api/wordpress-themes', payload);
         toast.success('Tema criado com sucesso!');
       }
       
@@ -178,7 +178,7 @@ export default function ThemeManagement() {
 
   const handleToggleActive = async (theme: Theme) => {
     try {
-      await api.post(`/wordpress-themes/${theme._id}/toggle-active`);
+      await api.post('/api/wordpress-themes/${theme._id}/toggle-active');
       toast.success(`Tema ${theme.isActive ? 'desativado' : 'ativado'} com sucesso!`);
       fetchThemes();
     } catch (error: any) {
@@ -188,7 +188,7 @@ export default function ThemeManagement() {
 
   const handleToggleDefault = async (theme: Theme) => {
     try {
-      await api.post(`/wordpress-themes/${theme._id}/toggle-default`);
+      await api.post('/api/wordpress-themes/${theme._id}/toggle-default');
       toast.success(`Status de padrão ${theme.isDefault ? 'removido' : 'definido'}!`);
       fetchThemes();
     } catch (error: any) {
@@ -200,7 +200,7 @@ export default function ThemeManagement() {
     if (!confirm(`Tem certeza que deseja excluir o tema "${theme.name}"?`)) return;
     
     try {
-      await api.delete(`/wordpress-themes/${theme._id}`);
+      await api.delete('/api/wordpress-themes/${theme._id}');
       toast.success('Tema excluído com sucesso!');
       fetchThemes();
     } catch (error: any) {

@@ -30,7 +30,7 @@ export default function ContentSettings() {
     queryFn: async () => {
       console.log('Fetching content settings...');
       try {
-        const response = await api.get('/content-settings');
+        const response = await api.get('/api/content-settings');
         console.log('Content settings response:', response.data);
         return response.data.data;
       } catch (err) {
@@ -57,7 +57,7 @@ export default function ContentSettings() {
   // Save settings mutation
   const saveMutation = useMutation({
     mutationFn: async (data: ContentSettings) => {
-      const response = await api.put('/content-settings', data);
+      const response = await api.put('/api/content-settings', data);
       return response.data;
     },
     onSuccess: () => {
@@ -73,7 +73,7 @@ export default function ContentSettings() {
   const testPexelsConnection = async () => {
     setTestingPexels(true);
     try {
-      const response = await api.post('/content-settings/pexels/test', { 
+      const response = await api.post('/api/content-settings/pexels/test', { 
         apiKey: formData.pexels.apiKey?.startsWith('***') ? undefined : formData.pexels.apiKey 
       });
       

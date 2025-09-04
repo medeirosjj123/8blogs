@@ -3,7 +3,7 @@ import type { AxiosError, AxiosInstance } from 'axios';
 import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 // Create axios instance
 const api: AxiosInstance = axios.create({
@@ -98,7 +98,7 @@ api.interceptors.response.use(
       
       // If we have a refresh token, try to use it
       try {
-        const response = await axios.post(`${API_URL}/auth/refresh`, {
+        const response = await axios.post(`${API_URL}/api/auth/refresh`, {
           refreshToken,
         });
         

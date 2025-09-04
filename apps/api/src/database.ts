@@ -17,7 +17,7 @@ const logger = pino({
 const mongoOptions: mongoose.ConnectOptions = {
   maxPoolSize: 10,
   minPoolSize: 2,
-  serverSelectionTimeoutMS: 5000,
+  serverSelectionTimeoutMS: 30000, // Increased from 5s to 30s
   socketTimeoutMS: 45000,
   bufferCommands: false, // Disable buffering when not connected
 };

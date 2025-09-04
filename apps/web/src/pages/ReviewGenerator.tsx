@@ -12,16 +12,20 @@ import {
   CheckCircle,
   X,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Upload
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useUsage } from '../hooks/useUsage';
 
 // Import the new modal components
 import { ReviewSuccessModal } from '../components/modals/ReviewSuccessModal';
 import { WordPressSiteModal } from '../components/modals/WordPressSiteModal';
+import { BulkUploadModal } from '../components/BulkUploadModal';
+import { UpgradeModal } from '../components/modals/UpgradeModal';
 
 interface Product {
   name: string;
@@ -67,6 +71,7 @@ interface GeneratedReview {
 export default function ReviewGenerator() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { usage } = useUsage();
   const [title, setTitle] = useState('');
   const [contentType, setContentType] = useState<'bbr' | 'spr' | 'informational'>('bbr');
   const [outline, setOutline] = useState<OutlineItem[]>([]);
@@ -79,12 +84,14 @@ export default function ReviewGenerator() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showSiteModal, setShowSiteModal] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Fetch WordPress sites for publishing
   const { data: wordpressSites, isLoading: sitesLoading, error: sitesError } = useQuery({
     queryKey: ['wordpress-sites'],
     queryFn: async () => {
-      const response = await api.get('/wordpress/sites');
+      const response = await api.get('/api/wordpress/sites');
       return response.data.data;
     }
   });
@@ -93,7 +100,7 @@ export default function ReviewGenerator() {
   const { data: reviewFeature } = useQuery({
     queryKey: ['feature-review-generator'],
     queryFn: async () => {
-      const response = await api.get('/features/review-generator');
+      const response = await api.get('/api/features/review-generator');
       return response.data.data;
     },
     staleTime: 5 * 60 * 1000 // Cache for 5 minutes
@@ -140,7 +147,7 @@ export default function ReviewGenerator() {
       }, 2000);
 
       try {
-        const response = await api.post('/reviews/generate', data);
+        const response = await api.post('/api/reviews/generate', data);
         clearInterval(stepInterval);
         
         // Complete all steps
@@ -170,7 +177,7 @@ export default function ReviewGenerator() {
   // Publish to WordPress mutation
   const publishMutation = useMutation({
     mutationFn: async (data: { reviewId: string; siteId: string }) => {
-      const response = await api.post(`/reviews/${data.reviewId}/publish`, {
+      const response = await api.post(`/api/reviews/${data.reviewId}/publish`, {
         siteId: data.siteId
       });
       return response.data;
@@ -319,10 +326,36 @@ export default function ReviewGenerator() {
     <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-black text-tatame-black mb-2">Gerador de Conteúdo</h1>
-        <p className="text-tatame-gray-600">
-          Crie reviews de produtos ou conteúdo educativo com IA
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-black text-tatame-black mb-2">Gerador de Conteúdo</h1>
+            <p className="text-tatame-gray-600">
+              Crie reviews de produtos ou conteúdo educativo com IA
+            </p>
+          </div>
+          
+          {/* Bulk Upload Button - Enhanced with better messaging */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                if (usage?.features?.bulkUpload) {
+                  setShowBulkUpload(true);
+                } else {
+                  // Show upgrade modal for non-premium users
+                  setShowUpgradeModal(true);
+                }
+              }}
+              className="flex items-center gap-3 gradient-primary hover:shadow-glow text-white font-semibold px-6 py-3 rounded-2xl transition-all duration-200 shadow-medium hover:shadow-glow transform hover:scale-105 group"
+            >
+              <Upload size={18} className="group-hover:rotate-12 transition-transform duration-200" />
+              <div className="flex flex-col items-start">
+                <span className="text-white font-bold">🚀 Gerar em Massa</span>
+                <span className="text-white/80 text-xs">10-50 reviews em minutos</span>
+              </div>
+            </button>
+            
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -926,6 +959,23 @@ export default function ReviewGenerator() {
         reviewTitle={generatedReview?.title || ''}
         isLoading={sitesLoading}
         error={sitesError}
+      />
+
+      {/* Bulk Upload Modal - Premium Feature */}
+      <BulkUploadModal
+        isOpen={showBulkUpload}
+        onClose={() => setShowBulkUpload(false)}
+        onSuccess={(results) => {
+          toast.success(`${results.filter(r => r.status === 'success').length} reviews geradas em massa!`);
+          // Could trigger a refresh of the reviews list here
+        }}
+      />
+
+      {/* Upgrade Modal */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        feature="Upload em Massa"
       />
     </div>
   );

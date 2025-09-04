@@ -3,7 +3,9 @@ import { ArrowRight, TrendingUp, Clock, Target, Award, PlayCircle, Trophy, Zap, 
 import { useStats, useActivities, useAchievements } from '../hooks/useStats';
 import { useCourses } from '../hooks/useCourses';
 import { useAuth } from '../contexts/AuthContext';
+import { useUsage } from '../hooks/useUsage';
 import { OnboardingModal } from '../components/OnboardingModal';
+import { UpgradePrompt } from '../components/UpgradePrompt';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -13,6 +15,12 @@ export const Dashboard: React.FC = () => {
   const { data: activities, isLoading: activitiesLoading } = useActivities(4);
   const { data: achievements, isLoading: achievementsLoading } = useAchievements();
   const { data: courses, isLoading: coursesLoading } = useCourses();
+  const { 
+    usage, 
+    showUpgradePrompt, 
+    upgradePromptType, 
+    handleUpgradePromptClose 
+  } = useUsage();
   
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -55,43 +63,64 @@ export const Dashboard: React.FC = () => {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-coral mx-auto mb-4" />
+          <Loader2 className="w-8 h-8 animate-spin text-bloghouse-primary-600 mx-auto mb-4" />
           <p className="text-slate-600">Carregando seus dados...</p>
         </div>
       </div>
     );
   }
 
+  // Use real usage data or fallback to user subscription
+  const usageData = usage || {
+    plan: (user?.subscription?.plan || 'starter') as 'starter' | 'pro' | 'premium',
+    usage: {
+      blogs: { used: 2, limit: user?.subscription?.blogsLimit || 1, percentage: 0 },
+      reviews: { used: user?.subscription?.reviewsUsed || 0, limit: user?.subscription?.reviewsLimit || 40, percentage: 0 }
+    },
+    features: user?.subscription?.features || {
+      bulkUpload: false,
+      weeklyCalls: false,
+      coursesAccess: false,
+      prioritySupport: false
+    }
+  };
+
+  // Format limits for display
+  const formatLimit = (used: number, limit: number) => {
+    if (limit === -1) return 'Ilimitado'; // Unlimited
+    return `${used}/${limit}`;
+  };
+
   const statsCards = [
     { 
       label: 'Blogs Ativos', 
-      value: '2/3', 
-      change: '+1 este mês', 
+      value: formatLimit(usageData.usage.blogs.used, usageData.usage.blogs.limit),
+      change: usageData.usage.blogs.limit === -1 ? 'Ilimitado' : `${Math.max(0, usageData.usage.blogs.limit - usageData.usage.blogs.used)} restantes`,
       icon: <Globe size={18} />, 
       bgColor: 'bg-gradient-to-br from-blue-50 to-indigo-50',
       iconColor: 'text-blue-600' 
     },
     { 
       label: 'Reviews Geradas', 
-      value: '45/100', 
-      change: '+12 esta semana', 
+      value: formatLimit(usageData.usage.reviews.used, usageData.usage.reviews.limit),
+      change: usageData.usage.reviews.limit === -1 ? 'Ilimitado' : `${Math.max(0, usageData.usage.reviews.limit - usageData.usage.reviews.used)} restantes`,
       icon: <FileText size={18} />, 
       bgColor: 'bg-gradient-to-br from-amber-50 to-orange-50',
       iconColor: 'text-amber-600' 
     },
     { 
-      label: 'Receita Estimada', 
-      value: 'R$ 2.450', 
-      change: '+15% este mês', 
-      icon: <DollarSign size={18} />, 
+      label: 'Plano Atual', 
+      value: usageData.plan.charAt(0).toUpperCase() + usageData.plan.slice(1), 
+      change: (user?.subscription?.billingCycle === 'yearly' ? 'Anual' : 'Mensal') || 'Mensal',
+      icon: <Award size={18} />, 
       bgColor: 'bg-gradient-to-br from-emerald-50 to-teal-50',
       iconColor: 'text-emerald-600' 
     },
     { 
-      label: 'Posts Publicados', 
-      value: '28', 
-      change: '+8 esta semana', 
-      icon: <TrendingUp size={18} />, 
+      label: 'Recursos Premium', 
+      value: Object.values(usageData.features).filter(Boolean).length.toString(), 
+      change: usageData.features.coursesAccess ? 'Cursos inclusos' : 'Upgrades disponíveis',
+      icon: <Sparkles size={18} />, 
       bgColor: 'bg-gradient-to-br from-purple-50 to-pink-50',
       iconColor: 'text-purple-600' 
     },
@@ -104,19 +133,35 @@ export const Dashboard: React.FC = () => {
         isOpen={showOnboarding}
         onClose={() => setShowOnboarding(false)}
         userName={user?.name?.split(' ')[0]}
+        userPlan={usage?.plan}
+      />
+
+      {/* Upgrade Prompt */}
+      <UpgradePrompt
+        isOpen={showUpgradePrompt}
+        onClose={handleUpgradePromptClose}
+        limitType={upgradePromptType}
+        currentPlan={usageData.plan}
+        used={upgradePromptType === 'reviews' ? usageData.usage.reviews.used : usageData.usage.blogs.used}
+        limit={upgradePromptType === 'reviews' ? usageData.usage.reviews.limit : usageData.usage.blogs.limit}
       />
       
       {/* Welcome Header */}
       <div className="mb-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-2">
-              Olá, {user?.name?.split(' ')[0]}!
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-red-600 to-orange-500 bg-clip-text text-transparent mb-2">
+              E aí, {user?.name?.split(' ')[0]}! 💰
             </h1>
-            <p className="text-slate-600">Monitore o desempenho dos seus blogs e receita</p>
+            <p className="text-slate-600">
+              {usage?.plan === 'black_belt' ? 
+                'Dominando o Mercado de Afiliados como um profissional 🔥' : 
+                'Pronto para multiplicar sua receita com Amazon Afiliados?'
+              }
+            </p>
             <button
               onClick={() => setShowOnboarding(true)}
-              className="mt-2 text-sm text-coral hover:text-coral-dark transition-colors inline-flex items-center gap-1"
+              className="mt-2 text-sm text-bloghouse-primary-600 hover:text-bloghouse-primary-700 transition-colors inline-flex items-center gap-1"
             >
               <PlayCircle className="w-4 h-4" />
               Ver guia inicial
@@ -127,12 +172,36 @@ export const Dashboard: React.FC = () => {
           <div className="bg-white rounded-2xl p-4 shadow-soft">
             <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">Seu Plano</p>
             <div className="flex items-center gap-3">
-              <div className="h-10 w-32 rounded-lg bg-gradient-to-r from-coral to-rose-400 shadow-sm flex items-center justify-center">
-                <span className="text-white font-semibold text-sm">PRO</span>
-              </div>
+              {usage?.plan === 'black_belt' ? (
+                <div className="h-10 w-32 rounded-lg bg-gradient-to-r from-yellow-500 to-yellow-600 shadow-sm flex items-center justify-center">
+                  <span className="text-white font-semibold text-sm">BLACK BELT</span>
+                </div>
+              ) : usage?.plan === 'pro' ? (
+                <div className="h-10 w-32 rounded-lg gradient-primary bloghouse-glow flex items-center justify-center">
+                  <span className="text-white font-semibold text-sm">PRO</span>
+                </div>
+              ) : (
+                <div className="h-10 w-32 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 shadow-sm flex items-center justify-center">
+                  <span className="text-white font-semibold text-sm">STARTER</span>
+                </div>
+              )}
               <div>
-                <p className="text-sm font-semibold text-slate-900">Plano Pro</p>
-                <p className="text-xs text-slate-500">3 blogs • 100 reviews/mês</p>
+                {usage?.plan === 'black_belt' ? (
+                  <>
+                    <p className="text-sm font-semibold text-slate-900">Black Belt 🥋</p>
+                    <p className="text-xs text-slate-500">Elite Amazon Affiliate</p>
+                  </>
+                ) : usage?.plan === 'pro' ? (
+                  <>
+                    <p className="text-sm font-semibold text-slate-900">Pro Blogger</p>
+                    <p className="text-xs text-slate-500">Escalando com 3 blogs</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-slate-900">Iniciante</p>
+                    <p className="text-xs text-slate-500">Primeiro blog rentável</p>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -159,6 +228,98 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Tier-Specific Features Section */}
+      <div className="mb-8">
+        {usage?.plan === 'black_belt' ? (
+          <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200 rounded-2xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center">
+                <Award className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Black Belt Elite! 🥋</h3>
+                <p className="text-gray-700">Você desbloqueou o nível máximo - hora de dominar o mercado!</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="bg-white p-5 rounded-xl border border-green-200 hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-green-600" />
+                  </div>
+                  <h4 className="font-semibold text-gray-900">Automação Elite</h4>
+                </div>
+                <p className="text-sm text-gray-600 mb-2">Upload em massa + reviews ilimitadas</p>
+                <p className="text-xs text-green-600 font-medium">Potencial: R$ 10k+/mês com 1 CSV</p>
+              </div>
+              <div className="bg-white p-5 rounded-xl border border-purple-200 hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Trophy className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <h4 className="font-semibold text-gray-900">Comunidade Black Belt</h4>
+                </div>
+                <p className="text-sm text-gray-600 mb-2">Networking com os top 1% dos afiliados</p>
+                <button 
+                  onClick={() => window.location.href = '/comunidade'}
+                  className="text-xs text-purple-600 font-medium hover:text-purple-700 transition-colors"
+                >
+                  Participar agora →
+                </button>
+              </div>
+            </div>
+            <div className="gradient-primary rounded-xl p-4 text-white bloghouse-glow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold mb-1">🎯 Sua Meta Black Belt</h4>
+                  <p className="text-sm opacity-90">Próximo marco: R$ 10.000 em comissões mensais</p>
+                </div>
+                <button 
+                  onClick={() => window.location.href = '/ferramentas/gerador-reviews'}
+                  className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Gerar conteúdo
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gradient-to-r from-slate-50 to-blue-50 border border-blue-200 rounded-2xl p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center">
+                  <Trophy className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Pronto para ser ELITE? 💎</h3>
+                  <p className="text-gray-700">Desbloqueie os segredos dos top affiliates que faturam 6 dígitos</p>
+                </div>
+              </div>
+              <button
+                onClick={() => window.location.href = '/pricing'}
+                className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-semibold px-6 py-3 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
+              >
+                Ver Black Belt
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <div className="bg-white p-4 rounded-xl opacity-75">
+                <h4 className="font-semibold text-gray-900 mb-2">🚀 Geração em Massa</h4>
+                <p className="text-sm text-gray-600">Apenas para Black Belts</p>
+              </div>
+              <div className="bg-white p-4 rounded-xl opacity-75">
+                <h4 className="font-semibold text-gray-900 mb-2">👥 Comunidade Exclusiva</h4>
+                <p className="text-sm text-gray-600">Apenas para Black Belts</p>
+              </div>
+              <div className="bg-white p-4 rounded-xl opacity-75">
+                <h4 className="font-semibold text-gray-900 mb-2">📚 Cursos Exclusivos</h4>
+                <p className="text-sm text-gray-600">Apenas para Black Belts</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Courses Section */}
       {courses && courses.length > 0 && (
         <div className="mb-8">
@@ -167,7 +328,7 @@ export const Dashboard: React.FC = () => {
               <h2 className="text-xl font-bold text-slate-900">Trilha de Aprendizado</h2>
               <p className="text-sm text-slate-500 mt-1">Continue de onde parou</p>
             </div>
-            <button className="text-coral hover:text-coral-dark text-sm font-medium flex items-center gap-1 transition-colors">
+            <button className="text-bloghouse-primary-600 hover:text-bloghouse-primary-700 text-sm font-medium flex items-center gap-1 transition-colors">
               Ver todos <ChevronRight size={16} />
             </button>
           </div>
@@ -211,7 +372,7 @@ export const Dashboard: React.FC = () => {
                 
                 {/* Course Content */}
                 <div className="p-5">
-                  <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-coral transition-colors">
+                  <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-bloghouse-primary-600 transition-colors">
                     {course.title}
                   </h3>
                   <p className="text-sm text-slate-500 mb-4">{course.description}</p>
@@ -232,7 +393,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                       <div 
-                        className="h-full rounded-full bg-gradient-to-r from-coral-light to-coral transition-all duration-500"
+                        className="h-full rounded-full gradient-primary transition-all duration-500"
                         style={{ width: `${course.progress || 0}%` }}
                       />
                     </div>
@@ -244,95 +405,43 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Bottom Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Continue Learning CTA */}
-        <div className="lg:col-span-2">
-          <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-8 text-white">
-            <div className="absolute inset-0 opacity-10">
-              <div className="absolute -right-20 -top-20 w-60 h-60 bg-coral rounded-full blur-3xl" />
-              <div className="absolute -left-20 -bottom-20 w-60 h-60 bg-blue-500 rounded-full blur-3xl" />
+      {/* Bottom CTA Section */}
+      <div className="mb-8">
+        <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-8 text-white">
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute -right-20 -top-20 w-60 h-60 bg-bloghouse-primary-500 rounded-full blur-3xl" />
+            <div className="absolute -left-20 -bottom-20 w-60 h-60 bg-blue-500 rounded-full blur-3xl" />
+          </div>
+          
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="text-bloghouse-primary-600" size={20} />
+              <span className="text-bloghouse-primary-600 text-sm font-medium">Acelere seus ganhos 🚀</span>
             </div>
+            <h3 className="text-2xl font-bold mb-2">
+              Próximo Passo: R$ 10.000/mês
+            </h3>
+            <p className="text-slate-300 mb-6">
+              Descubra as estratégias secretas dos Black Belts que faturam alto com Amazon
+            </p>
             
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="text-coral" size={20} />
-                <span className="text-coral text-sm font-medium">Continue de onde parou</span>
-              </div>
-              <h3 className="text-2xl font-bold mb-2">
-                {courses?.[0]?.currentLesson?.title || 'WordPress Performance'}
-              </h3>
-              <p className="text-slate-300 mb-6">
-                {courses?.[0]?.title || 'Módulo 3: Otimização avançada'}
-              </p>
-              
-              <div className="flex items-center gap-4">
-                <button className="bg-coral hover:bg-coral-dark text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 flex items-center gap-2 shadow-lg shadow-coral/20">
-                  <PlayCircle size={18} />
-                  Continuar Assistindo
-                </button>
-                <div className="flex items-center gap-2 text-sm text-slate-400">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                  <span>234 online agora</span>
-                </div>
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => window.location.href = '/pricing'}
+                className="gradient-primary hover:gradient-secondary text-white px-6 py-3 rounded-xl font-medium transition-all duration-300 flex items-center gap-2 bloghouse-glow hover:bloghouse-glow-secondary"
+              >
+                <TrendingUp size={18} />
+                Virar Black Belt
+              </button>
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                <span>+500 Black Belts ativos</span>
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Achievements */}
-        <div className="bg-white rounded-2xl p-6 shadow-soft">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">Conquistas Recentes</h3>
-          {achievementsLoading ? (
-            <div className="text-center py-4">
-              <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-400" />
-            </div>
-          ) : (
-            <div className="grid grid-cols-5 gap-3">
-              {achievements?.slice(0, 5).map((achievement: any) => (
-                <div
-                  key={achievement.id}
-                  className={`relative group ${achievement.unlocked ? '' : 'opacity-40'}`}
-                >
-                  <div className="text-2xl p-3 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl hover:from-coral-50 hover:to-rose-50 transition-all duration-300 cursor-pointer flex items-center justify-center">
-                    {achievement.icon}
-                  </div>
-                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                    {achievement.name}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Activity Feed */}
-      {activities && activities.length > 0 && (
-        <div className="mt-6 bg-white rounded-2xl p-6 shadow-soft">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">Atividade Recente da Escola</h3>
-          <div className="space-y-3">
-            {activities.map((activity: any) => (
-              <div key={activity.id} className="flex items-start space-x-3">
-                <div className={`w-1 h-8 rounded ${getBeltClass(activity.userBelt)} flex-shrink-0 mt-1`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-slate-900">
-                    <span className="font-medium">{activity.userName}</span>
-                    <span className="text-slate-600"> {activity.action} </span>
-                    <span className="font-medium">{activity.target}</span>
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {formatDistanceToNow(new Date(activity.timestamp), { 
-                      addSuffix: true, 
-                      locale: ptBR 
-                    })}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

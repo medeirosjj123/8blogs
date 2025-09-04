@@ -451,11 +451,11 @@ class AdminService {
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString();
-    const response = await this.request(`/templates${query ? `?${query}` : ''}`);
+    const response = await this.request<any>(`/templates${query ? `?${query}` : ''}`);
     
-    // The API returns success and data fields
-    if (response?.success && response?.data) {
-      return response.data;
+    // The API returns success and data fields  
+    if ((response as any)?.success && (response as any)?.data) {
+      return (response as any).data;
     }
     
     return response;

@@ -1,6 +1,5 @@
 import api, { tokenManager } from './api';
 import type { IUser, IApiResponse } from '@tatame/types';
-import Cookies from 'js-cookie';
 
 export type LoginCredentials = {
   email: string;
@@ -21,7 +20,7 @@ export type AuthResponse = {
 
 class AuthService {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    const response = await api.post('/auth/login', credentials);
+    const response = await api.post('/api/auth/login', credentials);
     
     
     // Check if response has the expected structure
@@ -42,7 +41,7 @@ class AuthService {
   }
 
   async register(data: RegisterData): Promise<AuthResponse> {
-    const response = await api.post('/auth/register', data);
+    const response = await api.post('/api/auth/register', data);
     
     // Check if response has the expected structure
     if (!response.data?.data) {
@@ -59,11 +58,11 @@ class AuthService {
   }
 
   async requestMagicLink(email: string): Promise<void> {
-    await api.post('/auth/request-magic-link', { email });
+    await api.post('/api/auth/request-magic-link', { email });
   }
 
   async loginWithMagicLink(token: string): Promise<AuthResponse> {
-    const response = await api.get<IApiResponse<AuthResponse>>(`/auth/magic-link-login?token=${token}`);
+    const response = await api.get<IApiResponse<AuthResponse>>(`/api/auth/magic-link-login?token=${token}`);
     const { user, accessToken, refreshToken } = response.data.data!;
     
     tokenManager.setTokens(accessToken, refreshToken);
@@ -75,7 +74,7 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
-      await api.post('/auth/logout');
+      await api.post('/api/auth/logout');
     } finally {
       tokenManager.clearTokens();
       localStorage.removeItem('token');
@@ -84,7 +83,7 @@ class AuthService {
   }
 
   async getCurrentUser(): Promise<IUser> {
-    const response = await api.get('/auth/me');
+    const response = await api.get('/api/auth/me');
     
     
     // Check if response has the expected structure
@@ -107,7 +106,7 @@ class AuthService {
       website?: string;
     };
   }): Promise<IUser> {
-    const response = await api.put<IApiResponse<IUser>>('/auth/profile', data);
+    const response = await api.put<IApiResponse<IUser>>('/api/auth/profile', data);
     return response.data.data!;
   }
 }

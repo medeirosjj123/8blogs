@@ -98,7 +98,7 @@ export const PluginSelectionStep: React.FC<PluginSelectionProps> = ({
   const fetchPlugins = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/wordpress-plugins/active');
+      const response = await api.get('/api/wordpress-plugins/active');
       
       if (response.data.success) {
         setPlugins(response.data.data.plugins);
@@ -159,7 +159,7 @@ export const PluginSelectionStep: React.FC<PluginSelectionProps> = ({
   const checkPluginConflicts = async () => {
     try {
       const pluginSlugs = Array.from(selectedPlugins);
-      const response = await api.post('/wordpress-plugins/check-conflicts', {
+      const response = await api.post('/api/wordpress-plugins/check-conflicts', {
         pluginSlugs
       });
 

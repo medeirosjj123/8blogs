@@ -39,7 +39,7 @@ export const MagicLinkAuth: React.FC = () => {
       }
 
       try {
-        const response = await api.get(`/auth/magic-link?token=${token}`);
+        const response = await api.get(`/api/auth/magic-link?token=${token}`);
         
         if (response.data.success) {
           // Store the token and update auth context
@@ -75,23 +75,23 @@ export const MagicLinkAuth: React.FC = () => {
   }, [searchParams, setUserData, navigate]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sand-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-bloghouse-primary-50 via-white to-bloghouse-secondary-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center mb-6">
-          <div className="w-12 h-12 bg-gradient-to-br from-coral to-coral-dark rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-xl">E</span>
+          <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center bloghouse-glow">
+            <span className="text-white font-bold text-xl">B</span>
           </div>
         </div>
         
-        <div className="bg-white py-8 px-4 shadow-soft sm:rounded-xl sm:px-10">
+        <div className="bg-white py-8 px-4 bloghouse-glow sm:rounded-xl sm:px-10 gradient-glass border border-bloghouse-primary-100">
           <div className="text-center">
             {status === 'loading' && (
               <>
-                <Loader2 className="w-12 h-12 text-coral mx-auto mb-4 animate-spin" />
-                <h2 className="text-xl font-bold text-slate-900 mb-2">
+                <Loader2 className="w-12 h-12 text-bloghouse-primary-600 mx-auto mb-4 animate-spin" />
+                <h2 className="text-xl font-bold bg-gradient-to-r from-bloghouse-primary-700 to-bloghouse-secondary-700 bg-clip-text text-transparent mb-2">
                   Autenticando...
                 </h2>
-                <p className="text-slate-600">
+                <p className="text-bloghouse-gray-600">
                   Processando seu link de acesso
                 </p>
               </>
@@ -100,10 +100,10 @@ export const MagicLinkAuth: React.FC = () => {
             {status === 'success' && (
               <>
                 <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
-                <h2 className="text-xl font-bold text-slate-900 mb-2">
+                <h2 className="text-xl font-bold bg-gradient-to-r from-bloghouse-accent-600 to-bloghouse-primary-600 bg-clip-text text-transparent mb-2">
                   Acesso Autorizado!
                 </h2>
-                <p className="text-slate-600">
+                <p className="text-bloghouse-gray-600">
                   {message}
                 </p>
               </>
@@ -112,15 +112,15 @@ export const MagicLinkAuth: React.FC = () => {
             {status === 'error' && (
               <>
                 <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                <h2 className="text-xl font-bold text-slate-900 mb-2">
+                <h2 className="text-xl font-bold text-red-600 mb-2">
                   Erro de Autenticação
                 </h2>
-                <p className="text-slate-600 mb-6">
+                <p className="text-bloghouse-gray-600 mb-6">
                   {message}
                 </p>
                 <button
                   onClick={() => navigate('/login')}
-                  className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-coral to-rose-400 hover:from-coral-dark hover:to-rose-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-coral transition-all"
+                  className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white gradient-primary hover:gradient-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-bloghouse-primary-600 transition-all bloghouse-glow hover:bloghouse-glow-secondary"
                 >
                   Voltar ao Login
                 </button>

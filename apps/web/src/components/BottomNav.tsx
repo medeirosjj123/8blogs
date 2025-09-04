@@ -18,7 +18,7 @@ export const BottomNav: React.FC = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 md:hidden z-50">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-bloghouse-primary-200 md:hidden z-50 gradient-glass">
       <div className="flex justify-around items-center h-16">
         {navItems.map((item) => (
           <NavLink
@@ -27,8 +27,8 @@ export const BottomNav: React.FC = () => {
             className={({ isActive }) =>
               `flex flex-col items-center justify-center px-3 py-2 transition-colors ${
                 isActive
-                  ? 'text-brand'
-                  : 'text-neutral-500 hover:text-neutral-700'
+                  ? 'text-bloghouse-primary-600'
+                  : 'text-bloghouse-gray-500 hover:text-bloghouse-primary-500'
               }`
             }
           >

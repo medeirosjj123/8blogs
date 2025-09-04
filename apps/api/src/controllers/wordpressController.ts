@@ -30,7 +30,7 @@ export const getUserWordPressSites = async (req: AuthRequest, res: Response) => 
   }
 };
 
-// Add new WordPress site
+// Add new WordPress site (external)
 export const addWordPressSite = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
@@ -61,14 +61,15 @@ export const addWordPressSite = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Create new site
+    // Create new external site
     const site = new WordPressSite({
       userId,
       name,
       url: url.replace(/\/$/, ''), // Remove trailing slash
       username,
       applicationPassword,
-      isDefault: isDefault || false
+      isDefault: isDefault || false,
+      siteType: 'external'
     });
 
     // Test connection before saving
@@ -97,6 +98,102 @@ export const addWordPressSite = async (req: AuthRequest, res: Response) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to add WordPress site'
+    });
+  }
+};
+
+// Add new managed WordPress site (VPS)
+export const addManagedWordPressSite = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    const { 
+      name, 
+      domain, 
+      username, 
+      applicationPassword, 
+      vpsConfig,
+      ipAddress,
+      wordpressVersion,
+      phpVersion,
+      isDefault 
+    } = req.body;
+
+    // Check if user is authenticated
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    // Validate required fields
+    if (!name || !domain || !username || !applicationPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, domain, username, and password are required'
+      });
+    }
+
+    const url = `https://${domain}`;
+
+    // Check if user already has this site
+    const existingSite = await WordPressSite.findOne({ 
+      userId, 
+      $or: [{ url }, { domain }]
+    });
+    
+    if (existingSite) {
+      return res.status(400).json({
+        success: false,
+        message: 'This site is already registered'
+      });
+    }
+
+    // Create new managed site
+    const site = new WordPressSite({
+      userId,
+      name,
+      url,
+      domain,
+      username,
+      applicationPassword,
+      isDefault: isDefault || false,
+      siteType: 'managed',
+      ipAddress,
+      vpsConfig: {
+        ...vpsConfig,
+        hasAccess: true
+      },
+      wordpressVersion,
+      phpVersion
+    });
+
+    // Test connection before saving
+    const isConnected = await site.testWordPressConnection();
+    if (!isConnected) {
+      return res.status(400).json({
+        success: false,
+        message: 'Failed to connect to WordPress site. Please check your credentials.',
+        error: site.testConnection?.error
+      });
+    }
+
+    await site.save();
+
+    // Return without password
+    const siteData = site.toObject();
+    delete siteData.applicationPassword;
+
+    res.status(201).json({
+      success: true,
+      data: siteData,
+      message: 'Managed WordPress site added successfully'
+    });
+  } catch (error: any) {
+    console.error('Error adding managed WordPress site:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to add managed WordPress site'
     });
   }
 };

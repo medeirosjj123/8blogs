@@ -1,7 +1,8 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, BookOpen, Users, Wrench, User, Trophy, LogOut, Sparkles, Shield, Search } from 'lucide-react';
+import { Home, BookOpen, Users, Wrench, User, Trophy, LogOut, Sparkles, Shield, Search, Video, BarChart3, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useUsage } from '../hooks/useUsage';
 
 interface NavItem {
   path: string;
@@ -11,6 +12,7 @@ interface NavItem {
 
 export const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
+  const { usage } = useUsage();
   const navigate = useNavigate();
   
   const handleLogout = async () => {
@@ -18,8 +20,11 @@ export const Sidebar: React.FC = () => {
     navigate('/login');
   };
   
-  const navItems: NavItem[] = [
+  // Base navigation items
+  const baseNavItems: NavItem[] = [
     { path: '/', icon: <Home size={18} />, label: 'Dashboard' },
+    { path: '/meus-sites', icon: <BarChart3 size={18} />, label: 'Meus Sites' },
+    { path: '/ferramentas/gerador-reviews', icon: <Zap size={18} />, label: 'Gerar Conteúdo' },
     { path: '/cursos', icon: <BookOpen size={18} />, label: 'Cursos' },
     { path: '/comunidade', icon: <Users size={18} />, label: 'Comunidade' },
     { path: '/descobrir', icon: <Search size={18} />, label: 'Descobrir' },
@@ -27,56 +32,75 @@ export const Sidebar: React.FC = () => {
     { path: '/perfil', icon: <User size={18} />, label: 'Perfil' },
   ];
 
+  // Add weekly calls for Premium users
+  const navItems = usage?.features?.weeklyCalls 
+    ? [
+        ...baseNavItems.slice(0, 6), // Everything before 'Perfil'
+        { path: '/chamadas', icon: <Video size={18} />, label: 'Chamadas Premium' },
+        baseNavItems[6] // 'Perfil' at the end
+      ]
+    : baseNavItems;
+
   const userBelt = 'azul';
   const userLevel = 15;
 
   return (
-    <aside className="hidden md:flex md:w-72 md:flex-col bg-white/80 backdrop-blur-xl border-r border-slate-100">
+    <aside className="hidden md:flex md:w-72 md:flex-col bg-white/80 backdrop-blur-xl border-r border-bloghouse-primary-200 gradient-glass">
       <div className="flex-1 flex flex-col pt-6 pb-4">
         {/* Logo */}
         <div className="px-6 mb-8">
           <div className="flex items-center">
             <div className="relative">
-              <div className="w-11 h-11 bg-gradient-to-br from-slate-800 to-slate-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-white font-bold text-lg">8</span>
+              <div className="w-11 h-11 gradient-primary rounded-2xl flex items-center justify-center bloghouse-glow">
+                <span className="text-white font-bold text-lg">B</span>
               </div>
-              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-gradient-to-br from-coral-light to-coral rounded-full border-2 border-white"></div>
+              <div className="absolute -bottom-1 -right-1 w-3 h-3 gradient-accent rounded-full border-2 border-white"></div>
             </div>
             <div className="ml-3">
-              <h1 className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-                8blogs
+              <h1 className="text-xl font-bold bg-gradient-to-r from-bloghouse-primary-700 to-bloghouse-secondary-700 bg-clip-text text-transparent">
+                Blog House
               </h1>
-              <p className="text-xs text-slate-500">Plataforma para Blogueiros</p>
+              <p className="text-xs text-bloghouse-gray-500">Plataforma para Blogueiros</p>
             </div>
           </div>
         </div>
 
         {/* User Progress Card */}
         <div className="px-4 mb-6">
-          <div className="bg-gradient-to-br from-slate-50 to-sand-50 rounded-2xl p-4 border border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles size={14} className="text-coral" />
-                <span className="text-xs font-semibold text-slate-700">Plano Pro</span>
+          {usage?.plan === 'black_belt' ? (
+            <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-2xl p-4 border border-yellow-200 gradient-glass">
+              <div className="flex items-center gap-2 mb-3">
+                <Trophy size={16} className="text-yellow-600" />
+                <span className="text-sm font-bold text-yellow-800">BLACK BELT</span>
               </div>
-              <span className="text-xs text-slate-500 bg-white px-2 py-0.5 rounded-full">
-                3 blogs
-              </span>
-            </div>
-            <div className="space-y-2">
-              <div className="w-full bg-white rounded-full h-2.5 overflow-hidden shadow-inner">
-                <div 
-                  className="h-full rounded-full bg-gradient-to-r from-blue-400 to-blue-500 shadow-sm" 
-                  style={{ width: '65%' }}
-                />
-              </div>
+              <p className="text-xs text-yellow-700 mb-3">Elite dos Afiliados 🥋</p>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-500 font-medium">45/100</span>
-                <span className="text-[10px] text-slate-400">reviews</span>
+                <span className="text-xs font-medium text-yellow-600">Recursos</span>
+                <span className="text-xs text-yellow-800 bg-yellow-200 px-2 py-0.5 rounded-full font-semibold">
+                  ILIMITADOS
+                </span>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-gradient-to-br from-bloghouse-primary-50 to-bloghouse-secondary-50 rounded-2xl p-4 border border-bloghouse-primary-200 gradient-glass">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-bloghouse-primary-500" />
+                  <span className="text-xs font-semibold text-bloghouse-gray-700">
+                    Plano {user?.subscription?.plan ? user.subscription.plan.charAt(0).toUpperCase() + user.subscription.plan.slice(1) : 'Starter'}
+                  </span>
+                </div>
+                <span className="text-xs text-bloghouse-gray-500 bg-white px-2 py-0.5 rounded-full">
+                  {user?.subscription?.blogsLimit === -1 
+                    ? '∞ blogs' 
+                    : `${user?.subscription?.blogsLimit || 1} ${(user?.subscription?.blogsLimit || 1) === 1 ? 'blog' : 'blogs'}`
+                  }
+                </span>
+              </div>
+            </div>
+          )}
         </div>
+
         
         {/* Navigation */}
         <nav className="flex-1 px-3 space-y-1">
@@ -84,11 +108,12 @@ export const Sidebar: React.FC = () => {
             <NavLink
               key={item.path}
               to={item.path}
+              end={item.path === '/ferramentas'}
               className={({ isActive }) =>
                 `group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                   isActive
-                    ? 'bg-gradient-to-r from-coral to-rose-400 text-white shadow-lg shadow-coral/20'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    ? 'gradient-primary text-white bloghouse-glow'
+                    : 'text-bloghouse-gray-600 hover:bg-bloghouse-primary-50 hover:text-bloghouse-gray-900'
                 }`
               }
             >
@@ -108,7 +133,7 @@ export const Sidebar: React.FC = () => {
                 className={({ isActive }) =>
                   `group flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                     isActive
-                      ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/20'
+                      ? 'gradient-secondary text-white bloghouse-glow-secondary'
                       : 'text-orange-600 hover:bg-orange-50 hover:text-orange-800 border border-orange-200'
                   }`
                 }
@@ -122,8 +147,8 @@ export const Sidebar: React.FC = () => {
 
         {/* Ranking Card */}
         <div className="px-4 mb-6">
-          <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-4 text-white">
-            <div className="absolute top-0 right-0 w-20 h-20 bg-coral/10 rounded-full blur-2xl" />
+          <div className="relative overflow-hidden bg-gradient-to-br from-bloghouse-gray-900 to-bloghouse-gray-800 rounded-2xl p-4 text-white gradient-glass-dark">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-bloghouse-primary-500/10 rounded-full blur-2xl" />
             <div className="relative">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -148,7 +173,7 @@ export const Sidebar: React.FC = () => {
         <div className="px-3">
           <button 
             onClick={handleLogout}
-            className="w-full flex items-center px-4 py-3 text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700 rounded-xl transition-all duration-200"
+            className="w-full flex items-center px-4 py-3 text-sm font-medium text-bloghouse-gray-500 hover:bg-bloghouse-primary-50 hover:text-bloghouse-gray-700 rounded-xl transition-all duration-200"
           >
             <LogOut size={18} className="mr-3" />
             Sair do Dojo

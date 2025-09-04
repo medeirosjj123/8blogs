@@ -71,6 +71,7 @@
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.4.7",
     "mongodb": "^6.18.0",
-    "mongoose": "^8.17.1"
+    "mongoose": "^8.17.1",
+    "react-dropzone": "^14.3.8"
   }
 }

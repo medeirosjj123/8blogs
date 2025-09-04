@@ -63,7 +63,7 @@ export const WordPressBackup: React.FC<WordPressBackupProps> = ({ onClose }) => 
     setBackupResult(null);
     
     try {
-      const response = await api.post('/sites/backup-wordpress', {
+      const response = await api.post('/api/sites/backup-wordpress', {
         domain: formData.domain.trim().toLowerCase(),
         vpsConfig: {
           host: formData.vpsHost,

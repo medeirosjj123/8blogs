@@ -98,7 +98,7 @@ export default function PluginManagement() {
 
   const fetchPlugins = async () => {
     try {
-      const response = await api.get('/wordpress-plugins');
+      const response = await api.get('/api/wordpress-plugins');
       setPlugins(response.data.data.plugins || []);
     } catch (error) {
       toast.error('Erro ao carregar plugins');
@@ -182,10 +182,10 @@ export default function PluginManagement() {
       };
 
       if (editingPlugin) {
-        await api.put(`/wordpress-plugins/${editingPlugin._id}`, payload);
+        await api.put('/api/wordpress-plugins/${editingPlugin._id}', payload);
         toast.success('Plugin atualizado com sucesso!');
       } else {
-        await api.post('/wordpress-plugins', payload);
+        await api.post('/api/wordpress-plugins', payload);
         toast.success('Plugin criado com sucesso!');
       }
       
@@ -198,7 +198,7 @@ export default function PluginManagement() {
 
   const handleToggleActive = async (plugin: Plugin) => {
     try {
-      await api.post(`/wordpress-plugins/${plugin._id}/toggle-active`);
+      await api.post('/api/wordpress-plugins/${plugin._id}/toggle-active');
       toast.success(`Plugin ${plugin.isActive ? 'desativado' : 'ativado'} com sucesso!`);
       fetchPlugins();
     } catch (error: any) {
@@ -208,7 +208,7 @@ export default function PluginManagement() {
 
   const handleToggleDefault = async (plugin: Plugin) => {
     try {
-      await api.post(`/wordpress-plugins/${plugin._id}/toggle-default`);
+      await api.post('/api/wordpress-plugins/${plugin._id}/toggle-default');
       toast.success(`Status de padrão ${plugin.isDefault ? 'removido' : 'definido'}!`);
       fetchPlugins();
     } catch (error: any) {
@@ -220,7 +220,7 @@ export default function PluginManagement() {
     if (!confirm(`Tem certeza que deseja excluir o plugin "${plugin.name}"?`)) return;
     
     try {
-      await api.delete(`/wordpress-plugins/${plugin._id}`);
+      await api.delete('/api/wordpress-plugins/${plugin._id}');
       toast.success('Plugin excluído com sucesso!');
       fetchPlugins();
     } catch (error: any) {

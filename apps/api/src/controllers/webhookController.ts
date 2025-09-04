@@ -20,9 +20,14 @@ const logger = pino({
 // Kiwify Product ID to Plan mapping
 const KIWIFY_PRODUCT_MAPPING: Record<string, string> = {
   // Map your Kiwify product IDs to internal plans
-  'kiwify_product_basic': 'basic',
-  'kiwify_product_pro': 'pro',
-  'kiwify_product_premium': 'premium'
+  'kiwify_product_basic': 'basic', // Legacy - keep for existing customers
+  'kiwify_product_pro': 'pro',     // Legacy - keep for existing customers
+  'kiwify_product_premium': 'premium', // Legacy - keep for existing customers
+  
+  // New 8blogs pricing plans - these will be configured in Kiwify
+  'kiwify_product_starter': 'starter',     // R$ 197/month
+  'kiwify_product_pro_new': 'pro',         // R$ 297/month  
+  'kiwify_product_premium_new': 'premium'  // R$ 1997/year
 };
 
 interface KiwifyWebhookPayload {
@@ -61,6 +66,68 @@ function verifyKiwifySignature(payload: string, signature: string): boolean {
     Buffer.from(signature),
     Buffer.from(expectedSignature)
   );
+}
+
+function getSubscriptionLimits(plan: string) {
+  switch (plan) {
+    case 'starter':
+      return {
+        plan: 'starter' as const,
+        blogsLimit: 1,
+        reviewsLimit: 40,
+        reviewsUsed: 0,
+        billingCycle: 'monthly' as const,
+        features: {
+          bulkUpload: false,
+          weeklyCalls: false,
+          coursesAccess: false,
+          prioritySupport: false
+        }
+      };
+    case 'pro':
+      return {
+        plan: 'pro' as const,
+        blogsLimit: 3,
+        reviewsLimit: 100,
+        reviewsUsed: 0,
+        billingCycle: 'monthly' as const,
+        features: {
+          bulkUpload: false,
+          weeklyCalls: false,
+          coursesAccess: false,
+          prioritySupport: true
+        }
+      };
+    case 'premium':
+      return {
+        plan: 'premium' as const,
+        blogsLimit: -1, // Unlimited
+        reviewsLimit: -1, // Unlimited
+        reviewsUsed: 0,
+        billingCycle: 'yearly' as const,
+        features: {
+          bulkUpload: true,
+          weeklyCalls: true,
+          coursesAccess: true,
+          prioritySupport: true
+        }
+      };
+    default:
+      // Legacy plans or unknown - set to basic limits
+      return {
+        plan: 'starter' as const,
+        blogsLimit: 1,
+        reviewsLimit: 40,
+        reviewsUsed: 0,
+        billingCycle: 'monthly' as const,
+        features: {
+          bulkUpload: false,
+          weeklyCalls: false,
+          coursesAccess: false,
+          prioritySupport: false
+        }
+      };
+  }
 }
 
 export async function handleKiwifyWebhook(req: Request, res: Response): Promise<void> {
@@ -219,12 +286,27 @@ async function handlePurchaseApproved(data: KiwifyWebhookPayload['data']): Promi
       }
     }
     
+    // Get subscription limits for the plan
+    const subscriptionLimits = getSubscriptionLimits(plan);
+    
     // Update user role based on plan
     if (plan === 'premium') {
       user.role = 'mentor';
     }
     
-    // Update user membership info
+    // Calculate next reset date (first day of next month)
+    const nextResetDate = new Date();
+    nextResetDate.setMonth(nextResetDate.getMonth() + 1);
+    nextResetDate.setDate(1);
+    nextResetDate.setHours(0, 0, 0, 0);
+    
+    // Update user subscription info
+    user.subscription = {
+      ...subscriptionLimits,
+      nextResetDate: nextResetDate
+    };
+    
+    // Update user membership info (keep legacy for compatibility)
     user.membership = {
       product: data.product_name,
       status: 'active',
@@ -249,10 +331,24 @@ async function handlePurchaseCancelled(data: KiwifyWebhookPayload['data']): Prom
     
     await membership.cancel('Purchase cancelled/refunded');
     
-    // Update user membership status
+    // Update user membership status and reset to starter plan
     const user = await User.findById(membership.userId);
-    if (user && user.membership) {
-      user.membership.status = 'cancelled';
+    if (user) {
+      // Reset to starter plan subscription
+      const starterLimits = getSubscriptionLimits('starter');
+      const nextResetDate = new Date();
+      nextResetDate.setMonth(nextResetDate.getMonth() + 1);
+      nextResetDate.setDate(1);
+      nextResetDate.setHours(0, 0, 0, 0);
+      
+      user.subscription = {
+        ...starterLimits,
+        nextResetDate: nextResetDate
+      };
+      
+      if (user.membership) {
+        user.membership.status = 'cancelled';
+      }
       await user.save();
     }
     
@@ -339,10 +435,24 @@ async function handleSubscriptionCancelled(data: KiwifyWebhookPayload['data']): 
     
     await membership.cancel('Subscription cancelled');
     
-    // Update user membership
+    // Update user membership and reset to starter plan
     const user = await User.findById(membership.userId);
-    if (user && user.membership) {
-      user.membership.status = 'cancelled';
+    if (user) {
+      // Reset to starter plan subscription
+      const starterLimits = getSubscriptionLimits('starter');
+      const nextResetDate = new Date();
+      nextResetDate.setMonth(nextResetDate.getMonth() + 1);
+      nextResetDate.setDate(1);
+      nextResetDate.setHours(0, 0, 0, 0);
+      
+      user.subscription = {
+        ...starterLimits,
+        nextResetDate: nextResetDate
+      };
+      
+      if (user.membership) {
+        user.membership.status = 'cancelled';
+      }
       await user.save();
     }
     

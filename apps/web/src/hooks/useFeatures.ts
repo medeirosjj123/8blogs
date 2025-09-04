@@ -23,7 +23,7 @@ export const useFeatures = () => {
   return useQuery<Feature[]>({
     queryKey: ['features'],
     queryFn: async () => {
-      const response = await api.get<FeaturesResponse>('/features');
+      const response = await api.get<FeaturesResponse>('/api/features');
       return response.data.data;
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes

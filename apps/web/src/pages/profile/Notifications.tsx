@@ -27,7 +27,7 @@ export const Notifications: React.FC = () => {
   const { data: preferences, isLoading } = useQuery({
     queryKey: ['notificationPreferences'],
     queryFn: async (): Promise<NotificationPreferences> => {
-      const response = await api.get('/auth/notification-preferences');
+      const response = await api.get('/api/auth/notification-preferences');
       return response.data.data || {
         emailNotifications: true,
         pushNotifications: true,
@@ -60,7 +60,7 @@ export const Notifications: React.FC = () => {
   // Update preferences mutation
   const updatePreferencesMutation = useMutation({
     mutationFn: async (newPreferences: NotificationPreferences) => {
-      return await api.put('/auth/notification-preferences', newPreferences);
+      return await api.put('/api/auth/notification-preferences', newPreferences);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notificationPreferences'] });

@@ -24,7 +24,7 @@ export const Security: React.FC = () => {
   // Change password mutation
   const changePasswordMutation = useMutation({
     mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
-      return await api.put('/auth/change-password', data);
+      return await api.put('/api/auth/change-password', data);
     },
     onSuccess: () => {
       toast.success('Senha alterada com sucesso!');

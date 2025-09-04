@@ -64,7 +64,7 @@ export const ThemeSelectionStep: React.FC<ThemeSelectionProps> = ({
   const fetchThemes = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/wordpress-themes/active');
+      const response = await api.get('/api/wordpress-themes/active');
       
       if (response.data.success) {
         setThemes(response.data.data.themes);

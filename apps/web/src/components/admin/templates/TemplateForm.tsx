@@ -274,7 +274,7 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({ template, onClose, o
                         onClick={() => {
                           setTemplateFile(null);
                           if (templateInputRef.current) templateInputRef.current.value = '';
-                          toast.info('Arquivo de template removido');
+                          toast('Arquivo de template removido');
                         }}
                         className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
                       >
@@ -326,7 +326,7 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({ template, onClose, o
                         onClick={() => {
                           setThumbnailFile(null);
                           if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
-                          toast.info('Imagem removida');
+                          toast('Imagem removida');
                         }}
                         className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition-colors"
                       >
