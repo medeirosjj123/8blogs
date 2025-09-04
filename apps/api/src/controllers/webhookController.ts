@@ -24,10 +24,15 @@ const KIWIFY_PRODUCT_MAPPING: Record<string, string> = {
   'kiwify_product_pro': 'pro',     // Legacy - keep for existing customers
   'kiwify_product_premium': 'premium', // Legacy - keep for existing customers
   
-  // New 8blogs pricing plans - these will be configured in Kiwify
-  'kiwify_product_starter': 'starter',     // R$ 197/month
-  'kiwify_product_pro_new': 'pro',         // R$ 297/month  
-  'kiwify_product_premium_new': 'premium'  // R$ 1997/year
+  // New Blog House pricing plans - Kiwify product IDs
+  'OuiK7qL': 'starter',    // Starter plan
+  '5TkGis8': 'black_belt', // Black Belt plan 
+  'XiRxVyi': 'pro',        // Pro plan
+  
+  // Alternative mapping if Kiwify sends full URLs or different identifiers
+  'kiwify_product_starter': 'starter',    
+  'kiwify_product_pro': 'pro',         
+  'kiwify_product_black_belt': 'black_belt'
 };
 
 interface KiwifyWebhookPayload {
@@ -95,6 +100,20 @@ function getSubscriptionLimits(plan: string) {
           bulkUpload: false,
           weeklyCalls: false,
           coursesAccess: false,
+          prioritySupport: true
+        }
+      };
+    case 'black_belt':
+      return {
+        plan: 'black_belt' as const,
+        blogsLimit: -1, // Unlimited
+        reviewsLimit: -1, // Unlimited
+        reviewsUsed: 0,
+        billingCycle: 'yearly' as const,
+        features: {
+          bulkUpload: true,
+          weeklyCalls: true,
+          coursesAccess: true,
           prioritySupport: true
         }
       };
@@ -290,7 +309,7 @@ async function handlePurchaseApproved(data: KiwifyWebhookPayload['data']): Promi
     const subscriptionLimits = getSubscriptionLimits(plan);
     
     // Update user role based on plan
-    if (plan === 'premium') {
+    if (plan === 'premium' || plan === 'black_belt') {
       user.role = 'mentor';
     }
     

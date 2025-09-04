@@ -214,6 +214,9 @@ importers:
       '@types/node-ssh':
         specifier: ^11.0.0
         version: 11.0.0
+      '@types/ssh2':
+        specifier: ^1.15.5
+        version: 1.15.5
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.20.0
         version: 8.41.0(@typescript-eslint/parser@8.41.0(eslint@8.57.1)(typescript@5.8.3))(eslint@8.57.1)(typescript@5.8.3)
@@ -1884,6 +1887,9 @@ packages:
     resolution: {integrity: sha512-C22T6YMptCoOdUePVsLQp2JZqRjx6ckXaSNNp3Sf3O6OK2xfIj4qZ9q8bzu00y8mX0ay6Wk37TN4yFyZws50rg==}
     deprecated: This is a stub types definition. node-ssh provides its own type definitions, so you do not need this installed.
 
+  '@types/node@18.19.124':
+    resolution: {integrity: sha512-hY4YWZFLs3ku6D2Gqo3RchTd9VRCcrjqp/I0mmohYeUVA5Y8eCXKJEasHxLAJVZRJuQogfd1GiJ9lgogBgKeuQ==}
+
   '@types/node@20.19.11':
     resolution: {integrity: sha512-uug3FEEGv0r+jrecvUUpbY8lLisvIjg6AAic6a2bSP5OEOLeJsDSnvhCDov7ipFFMXS3orMpzlmi0ZcuGkBbow==}
 
@@ -1936,6 +1942,9 @@ packages:
 
   '@types/speakeasy@2.0.10':
     resolution: {integrity: sha512-QVRlDW5r4yl7p7xkNIbAIC/JtyOcClDIIdKfuG7PWdDT1MmyhtXSANsildohy0K+Lmvf/9RUtLbNLMacvrVwxA==}
+
+  '@types/ssh2@1.15.5':
+    resolution: {integrity: sha512-N1ASjp/nXH3ovBHddRJpli4ozpk6UdDYIX4RJWFa9L1YKnzdhTlVmiGHm4DZnj/jLbqZpes4aeR30EFGQtvhQQ==}
 
   '@types/superagent@8.1.9':
     resolution: {integrity: sha512-pTVjI73witn+9ILmoJdajHGW2jkSaOzhiFYF1Rd3EQ94kymLqB9PjD9ISg7WaALC7+dCHT0FGe9T2LktLq/3GQ==}
@@ -4953,6 +4962,9 @@ packages:
     resolution: {integrity: sha512-nWJ91DjeOkej/TA8pXQ3myruKpKEYgqvpw9lz4OPHj/NWFNluYrjbz9j01CJ8yKQd2g4jFoOkINCTW2I5LEEyw==}
     engines: {node: '>= 0.4'}
 
+  undici-types@5.26.5:
+    resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
+
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
@@ -6484,6 +6496,10 @@ snapshots:
     dependencies:
       node-ssh: 13.2.1
 
+  '@types/node@18.19.124':
+    dependencies:
+      undici-types: 5.26.5
+
   '@types/node@20.19.11':
     dependencies:
       undici-types: 6.21.0
@@ -6552,6 +6568,10 @@ snapshots:
   '@types/speakeasy@2.0.10':
     dependencies:
       '@types/node': 22.18.0
+
+  '@types/ssh2@1.15.5':
+    dependencies:
+      '@types/node': 18.19.124
 
   '@types/superagent@8.1.9':
     dependencies:
@@ -10169,6 +10189,8 @@ snapshots:
       has-bigints: 1.1.0
       has-symbols: 1.1.0
       which-boxed-primitive: 1.1.1
+
+  undici-types@5.26.5: {}
 
   undici-types@6.21.0: {}
 
