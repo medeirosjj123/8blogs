@@ -78,8 +78,11 @@ const corsOptions = {
     const allowedOrigins = isProduction ? [
       // Production origins
       frontendUrl,
-      'https://tatame.afiliadofaixapreta.com.br',
-      'https://www.tatame.afiliadofaixapreta.com.br'
+      'https://bloghouse.com.br',
+      'https://app.bloghouse.com.br',
+      'http://app.bloghouse.com.br', // Temporary until SSL is configured
+      'https://tatame.afiliadofaixapreta.com.br', // Legacy support
+      'https://www.tatame.afiliadofaixapreta.com.br' // Legacy support
     ] : [
       // Development origins
       'http://localhost:5173',
