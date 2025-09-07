@@ -197,6 +197,14 @@ export const authRateLimiter = createRateLimiter({
   prefix: 'auth'
 });
 
+export const magicLinkRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  maxRequests: 10, // 10 attempts per 15 minutes (more lenient than auth)
+  message: 'Too many magic link requests. Please try again later.',
+  skipSuccessfulRequests: true, // Only count failed attempts
+  prefix: 'magic'
+});
+
 export const apiRateLimiter = createRateLimiter({
   windowMs: 60000, // 1 minute
   maxRequests: 100, // 100 requests per minute

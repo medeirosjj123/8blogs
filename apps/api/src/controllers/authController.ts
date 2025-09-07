@@ -77,7 +77,7 @@ export async function register(req: Request, res: Response): Promise<void> {
       email: email.toLowerCase(),
       passwordHash,
       name,
-      role: 'aluno',
+      role: 'starter',
       emailVerified: false
     });
     

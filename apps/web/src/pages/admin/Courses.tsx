@@ -242,7 +242,7 @@ export default function AdminCourses() {
             </div>
           ))}
         </div>
-      ) : courses && courses.length > 0 ? (
+      ) : (Array.isArray(courses) && courses.length > 0) ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {courses.map((course: any) => (
             <div key={course._id} className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden hover:border-coral/50 transition-colors">

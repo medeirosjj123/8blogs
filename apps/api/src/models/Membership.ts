@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IMembershipDocument extends Document {
   userId: mongoose.Types.ObjectId;
-  plan: 'basic' | 'pro' | 'premium';
+  plan: 'starter' | 'pro' | 'black_belt';
   status: 'active' | 'cancelled' | 'expired' | 'pending' | 'suspended';
   kiwifyOrderId: string;
   kiwifyCustomerId: string;
@@ -28,7 +28,7 @@ const membershipSchema = new Schema<IMembershipDocument>({
   },
   plan: {
     type: String,
-    enum: ['basic', 'pro', 'premium'],
+    enum: ['starter', 'pro', 'black_belt'],
     required: true
   },
   status: {

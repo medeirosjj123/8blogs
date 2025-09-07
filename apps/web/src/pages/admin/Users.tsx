@@ -22,16 +22,16 @@ import { adminService } from '../../services/admin.service';
 import toast from 'react-hot-toast';
 
 const roleLabels = {
-  aluno: 'Aluno',
-  mentor: 'Mentor',
-  moderador: 'Moderador',
+  starter: 'Starter',
+  pro: 'Pro',  
+  black_belt: 'Black Belt',
   admin: 'Administrador'
 };
 
 const roleColors = {
-  aluno: 'bg-blue-100 text-blue-800 border-blue-200',
-  moderador: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  mentor: 'bg-green-100 text-green-800 border-green-200',
+  starter: 'bg-blue-100 text-blue-800 border-blue-200',
+  pro: 'bg-green-100 text-green-800 border-green-200',
+  black_belt: 'bg-yellow-100 text-yellow-800 border-yellow-200', 
   admin: 'bg-red-100 text-red-800 border-red-200'
 };
 
@@ -58,7 +58,7 @@ export default function AdminUsers() {
     name: '',
     email: '',
     password: '',
-    role: 'aluno',
+    role: 'starter',
     isActive: true
   });
 
@@ -67,10 +67,29 @@ export default function AdminUsers() {
 
   const queryClient = useQueryClient();
 
+  // Clear cache on component mount to ensure fresh data
+  React.useEffect(() => {
+    console.log('Users Component - Clearing cache on mount');
+    queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+  }, [queryClient]);
+
   const { data: usersData, isLoading } = useQuery({
     queryKey: ['admin-users', page, search, roleFilter],
     queryFn: () => adminService.getUsers({ page, search, role: roleFilter, limit: 20 })
   });
+
+  // Log data when it changes (React Query v5 compatible)
+  React.useEffect(() => {
+    if (usersData) {
+      console.log('Users Query - Raw data received:', usersData);
+      console.log('Users Query - Data type:', typeof usersData);
+      console.log('Users Query - Is array:', Array.isArray(usersData));
+      console.log('Users Query - Has users property:', usersData && typeof usersData === 'object' && 'users' in usersData);
+      if (usersData && typeof usersData === 'object' && 'users' in usersData) {
+        console.log('Users Query - Users array length:', (usersData as any).users?.length);
+      }
+    }
+  }, [usersData]);
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) => 
@@ -157,7 +176,7 @@ export default function AdminUsers() {
       name: '',
       email: '',
       password: '',
-      role: 'aluno',
+      role: 'starter',
       isActive: true
     });
   };
@@ -168,7 +187,7 @@ export default function AdminUsers() {
       name: user.name || '',
       email: user.email || '',
       password: '',
-      role: user.role || 'aluno',
+      role: user.role || 'starter',
       isActive: user.isActive !== false
     });
     setShowEditModal(true);
@@ -285,9 +304,9 @@ export default function AdminUsers() {
             className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-coral"
           >
             <option value="">Todas as funções</option>
-            <option value="aluno">Aluno</option>
-            <option value="mentor">Mentor</option>
-            <option value="moderador">Moderador</option>
+            <option value="starter">Starter</option>
+            <option value="pro">Pro</option>
+            <option value="black_belt">Black Belt</option>
             <option value="admin">Administrador</option>
           </select>
         </div>
@@ -323,8 +342,15 @@ export default function AdminUsers() {
                     Carregando...
                   </td>
                 </tr>
-              ) : usersData?.users && usersData.users.length > 0 ? (
-                usersData.users.map((user: any) => (
+              ) : (() => {
+                console.log('Users Render - usersData:', usersData);
+                const users = usersData?.users || (Array.isArray(usersData) ? usersData : []);
+                console.log('Users Render - Final users array:', users);
+                return users && users.length > 0;
+              })() ? (
+                (() => {
+                  const users = usersData?.users || (Array.isArray(usersData) ? usersData : []);
+                  return users.map((user: any) => (
                   <tr key={user._id} className="hover:bg-slate-800/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -400,7 +426,8 @@ export default function AdminUsers() {
                       </div>
                     </td>
                   </tr>
-                ))
+                ));
+                })()
               ) : (
                 <tr>
                   <td colSpan={5} className="px-6 py-4 text-center text-slate-400">
@@ -413,10 +440,10 @@ export default function AdminUsers() {
         </div>
 
         {/* Pagination */}
-        {usersData?.totalPages > 1 && (
+        {(usersData?.totalPages > 1) && (
           <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between">
             <div className="text-sm text-slate-400">
-              Página {usersData.page} de {usersData.totalPages} ({usersData.total} usuários)
+              Página {usersData?.page || 1} de {usersData?.totalPages || 1} ({usersData?.total || 0} usuários)
             </div>
             <div className="flex gap-2">
               <button
@@ -505,9 +532,9 @@ export default function AdminUsers() {
                   onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
                   className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-coral"
                 >
-                  <option value="aluno">Aluno</option>
-                  <option value="mentor">Mentor</option>
-                  <option value="moderador">Moderador</option>
+                  <option value="starter">Starter</option>
+                  <option value="pro">Pro</option>
+                  <option value="black_belt">Black Belt</option>
                   <option value="admin">Administrador</option>
                 </select>
               </div>
@@ -616,9 +643,9 @@ export default function AdminUsers() {
                   onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
                   className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-coral"
                 >
-                  <option value="aluno">Aluno</option>
-                  <option value="mentor">Mentor</option>
-                  <option value="moderador">Moderador</option>
+                  <option value="starter">Starter</option>
+                  <option value="pro">Pro</option>
+                  <option value="black_belt">Black Belt</option>
                   <option value="admin">Administrador</option>
                 </select>
               </div>
@@ -760,9 +787,9 @@ export default function AdminUsers() {
               }}
               className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-coral mb-4"
             >
-              <option value="aluno">Aluno</option>
-              <option value="mentor">Mentor</option>
-              <option value="moderador">Moderador</option>
+              <option value="starter">Starter</option>
+              <option value="pro">Pro</option>
+              <option value="black_belt">Black Belt</option>
               <option value="admin">Administrador</option>
             </select>
             <button

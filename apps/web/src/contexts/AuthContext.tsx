@@ -40,17 +40,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Load user on mount
   useEffect(() => {
     const loadUser = async () => {
+      console.log('AuthContext: Loading user...');
       const token = tokenManager.getAccessToken();
+      console.log('AuthContext: Token found:', !!token);
       
       if (token) {
         try {
+          console.log('AuthContext: Fetching current user...');
           const userData = await authService.getCurrentUser();
+          console.log('AuthContext: User loaded successfully:', userData.email);
           setUser(userData);
         } catch (error) {
-          console.error('Failed to load user:', error);
+          console.error('AuthContext: Failed to load user:', error);
           tokenManager.clearTokens();
         }
       }
+      console.log('AuthContext: Loading complete, setting isLoading to false');
       setIsLoading(false);
     };
 

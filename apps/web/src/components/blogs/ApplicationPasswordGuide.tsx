@@ -35,7 +35,7 @@ export const ApplicationPasswordGuide: React.FC<ApplicationPasswordGuideProps> =
     {
       number: 4,
       title: 'Crie nova senha',
-      description: 'Digite "8blogs" no campo nome e clique "Adicionar Nova"'
+      description: 'Digite "BlogHouse" no campo nome e clique "Adicionar Nova"'
     },
     {
       number: 5,
@@ -80,9 +80,9 @@ export const ApplicationPasswordGuide: React.FC<ApplicationPasswordGuideProps> =
       <div className="border-t border-blue-200 pt-4">
         <h5 className="font-medium text-blue-900 mb-2">Nome sugerido para a senha:</h5>
         <div className="flex items-center gap-2">
-          <code className="bg-blue-100 px-2 py-1 rounded text-sm font-mono">8blogs</code>
+          <code className="bg-blue-100 px-2 py-1 rounded text-sm font-mono">BlogHouse</code>
           <button
-            onClick={() => copyToClipboard('8blogs')}
+            onClick={() => copyToClipboard('BlogHouse')}
             className="p-1 hover:bg-blue-200 rounded transition-colors"
             title="Copiar nome"
           >

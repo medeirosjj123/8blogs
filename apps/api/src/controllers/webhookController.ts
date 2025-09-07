@@ -2,7 +2,9 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { User } from '../models/User';
 import { Membership } from '../models/Membership';
+import { KiwifyPurchaseEvent } from '../models/KiwifyPurchaseEvent';
 import { emailService } from '../services/email.service';
+import { emailQueueService } from '../services/emailQueue.service';
 import { generateMagicLinkToken } from '../utils/auth';
 import pino from 'pino';
 
@@ -149,6 +151,200 @@ function getSubscriptionLimits(plan: string) {
   }
 }
 
+// Customer self-service order status check
+export const checkOrderStatus = async (req: Request, res: Response) => {
+  try {
+    const { email, orderId } = req.body;
+
+    if (!email || !orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and order ID are required'
+      });
+    }
+
+    // Find the purchase event
+    const purchaseEvent = await KiwifyPurchaseEvent.findOne({
+      orderId,
+      customerEmail: email.toLowerCase()
+    });
+
+    if (!purchaseEvent) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found. Please check your email and order ID.'
+      });
+    }
+
+    // Get detailed journey status
+    const journeyStatus = {
+      orderId: purchaseEvent.orderId,
+      customerName: purchaseEvent.customerName,
+      customerEmail: purchaseEvent.customerEmail,
+      plan: purchaseEvent.mappedPlan,
+      status: purchaseEvent.status,
+      createdAt: purchaseEvent.createdAt,
+      completedAt: purchaseEvent.completedAt,
+      processingTimeMs: purchaseEvent.processingTimeMs,
+      
+      // Step-by-step journey
+      journey: {
+        orderReceived: true, // If we found the event, order was received
+        userFound: purchaseEvent.userFound,
+        userCreated: purchaseEvent.userCreated,
+        membershipFound: purchaseEvent.membershipFound,
+        membershipCreated: purchaseEvent.membershipCreated,
+        subscriptionUpdated: purchaseEvent.subscriptionUpdated,
+        welcomeEmailSent: purchaseEvent.welcomeEmailSent,
+        magicLinkSent: purchaseEvent.magicLinkSent,
+        credentialsDelivered: purchaseEvent.credentialsDelivered
+      },
+      
+      // Error tracking
+      errors: purchaseEvent.errors,
+      retryInfo: {
+        retryCount: purchaseEvent.retryCount,
+        maxRetries: purchaseEvent.maxRetries,
+        nextRetryAt: purchaseEvent.nextRetryAt
+      }
+    };
+
+    // If credentials were not delivered but should be, offer to resend
+    let canResend = false;
+    if (purchaseEvent.status === 'success' && !purchaseEvent.credentialsDelivered) {
+      canResend = true;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...journeyStatus,
+        canResend,
+        message: getStatusMessage(purchaseEvent)
+      }
+    });
+
+  } catch (error) {
+    logger.error({ error: error instanceof Error ? error.message : error }, 'Error checking order status');
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error. Please try again later.'
+    });
+  }
+};
+
+// Resend credentials for a specific order
+export const resendCredentials = async (req: Request, res: Response) => {
+  try {
+    const { email, orderId } = req.body;
+
+    if (!email || !orderId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and order ID are required'
+      });
+    }
+
+    // Find the purchase event
+    const purchaseEvent = await KiwifyPurchaseEvent.findOne({
+      orderId,
+      customerEmail: email.toLowerCase()
+    });
+
+    if (!purchaseEvent) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    if (purchaseEvent.credentialsDelivered) {
+      return res.status(400).json({
+        success: false,
+        error: 'Credentials have already been delivered for this order'
+      });
+    }
+
+    // Generate new magic link token
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User account not found'
+      });
+    }
+
+    const magicToken = await generateMagicLinkToken(user._id.toString());
+
+    // Get plan details from user's membership
+    const membership = await Membership.findOne({ userId: user._id });
+    const subscriptionDetails = {
+      plan: membership?.plan || purchaseEvent.mappedPlan,
+      blogsLimit: membership?.blogsLimit || 1,
+      reviewsLimit: membership?.reviewsLimit || 5,
+      features: membership?.features ? Object.keys(membership.features).filter(k => membership.features[k]) : []
+    };
+
+    // Queue credential email with high priority
+    await emailQueueService.queueCredentialEmail({
+      orderId,
+      customerEmail: email.toLowerCase(),
+      customerName: purchaseEvent.customerName,
+      magicToken,
+      plan: purchaseEvent.mappedPlan,
+      role: user.role,
+      subscriptionDetails
+    });
+
+    logger.info({
+      orderId,
+      email: email.toLowerCase(),
+      action: 'resend_credentials'
+    }, 'Credentials resend requested by customer');
+
+    res.json({
+      success: true,
+      message: 'Credentials have been queued for delivery. You should receive an email within the next few minutes.'
+    });
+
+  } catch (error) {
+    logger.error({ error: error instanceof Error ? error.message : error }, 'Error resending credentials');
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error. Please try again later.'
+    });
+  }
+};
+
+// Helper function to get user-friendly status messages
+function getStatusMessage(purchaseEvent: any): string {
+  switch (purchaseEvent.status) {
+    case 'received':
+      return 'Your order has been received and is being processed.';
+    
+    case 'processing':
+      if (purchaseEvent.retryCount > 0) {
+        return `Your order is being processed (attempt ${purchaseEvent.retryCount + 1}/${purchaseEvent.maxRetries}). We're working to deliver your credentials.`;
+      }
+      return 'Your order is currently being processed.';
+    
+    case 'success':
+      if (purchaseEvent.credentialsDelivered) {
+        return 'Your order has been completed successfully and credentials have been delivered!';
+      }
+      return 'Your account has been created but credentials are pending delivery. You can request a resend below.';
+    
+    case 'failed':
+      if (purchaseEvent.retryCount >= purchaseEvent.maxRetries) {
+        return 'There was an issue processing your order. Our support team has been notified and will contact you shortly.';
+      }
+      return 'There was a temporary issue with your order. We are retrying the process automatically.';
+    
+    default:
+      return 'Order status unknown. Please contact support if this persists.';
+  }
+}
+
 export async function handleKiwifyWebhook(req: Request, res: Response): Promise<void> {
   try {
     // Get raw body for signature verification
@@ -208,44 +404,56 @@ export async function handleKiwifyWebhook(req: Request, res: Response): Promise<
 }
 
 async function handlePurchaseApproved(data: KiwifyWebhookPayload['data']): Promise<void> {
+  const startTime = Date.now();
+  
+  // Create tracking record
+  const trackingEvent = new KiwifyPurchaseEvent({
+    orderId: data.order_id,
+    customerId: data.customer_id,
+    customerEmail: data.customer_email.toLowerCase(),
+    customerName: data.customer_name,
+    productId: data.product_id,
+    productName: data.product_name,
+    event: 'pedido_aprovado',
+    payload: data,
+    processedAt: new Date(),
+    status: 'processing'
+  });
+  
   try {
+    await trackingEvent.save();
+    
     // Find or create user
     let user = await User.findOne({ email: data.customer_email.toLowerCase() });
+    
+    if (user) {
+      trackingEvent.markStep('userFound', true);
+    }
     
     if (!user) {
       // Create user if doesn't exist
       user = new User({
         email: data.customer_email.toLowerCase(),
         name: data.customer_name,
-        role: 'aluno',
+        role: 'starter', // Default to starter role (NOT aluno which doesn't exist)
         emailVerified: true // Consider verified if coming from Kiwify
       });
       await user.save();
       
       logger.info({ userId: user._id, email: user.email }, 'Created new user from Kiwify webhook');
       
-      // Send welcome email and magic link for new users
-      try {
-        const magicLinkData = generateMagicLinkToken();
-        user.magicLinkToken = magicLinkData.token;
-        user.magicLinkExpiresAt = magicLinkData.expiresAt;
-        await user.save();
-        
-        // Send both welcome and magic link emails
-        await Promise.all([
-          emailService.sendWelcomeEmail(user.email, user.name),
-          emailService.sendMagicLinkEmail(user.email, magicLinkData.token, user.name)
-        ]);
-        
-        logger.info({ userId: user._id }, 'Welcome and magic link emails sent to new user');
-      } catch (emailError) {
-        logger.error({ error: emailError, userId: user._id }, 'Failed to send welcome emails');
-        // Don't throw - webhook should still succeed even if emails fail
-      }
+      // Generate magic link for new user
+      const magicLinkData = generateMagicLinkToken();
+      user.magicLinkToken = magicLinkData.token;
+      user.magicLinkExpiresAt = magicLinkData.expiresAt;
+      await user.save();
+      
+      trackingEvent.markStep('userCreated', true);
+      logger.info({ userId: user._id, email: user.email }, 'Created new user from Kiwify webhook');
     }
     
     // Map product to plan
-    const plan = KIWIFY_PRODUCT_MAPPING[data.product_id] || 'basic';
+    const plan = KIWIFY_PRODUCT_MAPPING[data.product_id] || 'starter'; // Default to starter (NOT basic which doesn't exist)
     
     // Check if membership already exists
     let membership = await Membership.findOne({ kiwifyOrderId: data.order_id });
@@ -308,9 +516,21 @@ async function handlePurchaseApproved(data: KiwifyWebhookPayload['data']): Promi
     // Get subscription limits for the plan
     const subscriptionLimits = getSubscriptionLimits(plan);
     
-    // Update user role based on plan
-    if (plan === 'premium' || plan === 'black_belt') {
-      user.role = 'mentor';
+    // Update user role to match subscription plan
+    switch (plan) {
+      case 'black_belt':
+        user.role = 'black_belt';
+        break;
+      case 'pro':
+        user.role = 'pro';
+        break;
+      case 'premium': // Legacy plan - treat as black_belt
+        user.role = 'black_belt';
+        break;
+      case 'starter':
+      default:
+        user.role = 'starter';
+        break;
     }
     
     // Calculate next reset date (first day of next month)
@@ -333,7 +553,64 @@ async function handlePurchaseApproved(data: KiwifyWebhookPayload['data']): Promi
     };
     await user.save();
     
+    trackingEvent.markStep('subscriptionUpdated', true);
+    
+    // Queue credential email with all subscription details
+    try {
+      const magicLinkData = generateMagicLinkToken();
+      user.magicLinkToken = magicLinkData.token;
+      user.magicLinkExpiresAt = magicLinkData.expiresAt;
+      await user.save();
+      
+      // Prepare feature list for email
+      const features = [];
+      if (subscriptionLimits.features.bulkUpload) features.push('🚀 Geração em massa de conteúdo');
+      if (subscriptionLimits.features.weeklyCalls) features.push('📞 Calls semanais exclusivas');
+      if (subscriptionLimits.features.coursesAccess) features.push('📚 Acesso completo aos cursos');
+      if (subscriptionLimits.features.prioritySupport) features.push('⚡ Suporte prioritário');
+      
+      await emailQueueService.queueCredentialEmail({
+        orderId: data.order_id,
+        customerEmail: user.email,
+        customerName: user.name,
+        magicToken: magicLinkData.token,
+        plan,
+        role: user.role,
+        subscriptionDetails: {
+          plan,
+          blogsLimit: subscriptionLimits.blogsLimit,
+          reviewsLimit: subscriptionLimits.reviewsLimit,
+          features
+        }
+      });
+      
+      trackingEvent.markStep('credentialsDelivered', true);
+      await trackingEvent.markCompleted();
+      
+      logger.info({ 
+        userId: user._id, 
+        orderId: data.order_id, 
+        plan,
+        role: user.role 
+      }, 'Credential email queued successfully');
+      
+    } catch (emailError) {
+      trackingEvent.addError('email_queue', emailError instanceof Error ? emailError.message : 'Unknown error');
+      await trackingEvent.markFailed(emailError instanceof Error ? emailError.message : 'Email queue failed');
+      
+      logger.error({ 
+        error: emailError, 
+        userId: user._id, 
+        orderId: data.order_id 
+      }, 'Failed to queue credential email');
+    }
+    
   } catch (error) {
+    if (trackingEvent) {
+      trackingEvent.addError('general', error instanceof Error ? error.message : 'Unknown error');
+      await trackingEvent.markFailed(error instanceof Error ? error.message : 'Webhook processing failed');
+    }
+    
     logger.error({ error, orderId: data.order_id }, 'Error handling purchase approved');
     throw error;
   }

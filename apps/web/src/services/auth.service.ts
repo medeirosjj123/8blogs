@@ -78,7 +78,7 @@ class AuthService {
     } finally {
       tokenManager.clearTokens();
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      // Don't force redirect here - let AuthContext handle navigation
     }
   }
 

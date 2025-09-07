@@ -61,9 +61,9 @@ const Pricing = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-red-600 rounded-2xl flex items-center justify-center">
-                <span className="text-white font-bold text-xl">8</span>
+                <span className="text-white font-bold text-xl">BH</span>
               </div>
-              <span className="text-2xl font-bold text-slate-900">8blogs</span>
+              <span className="text-2xl font-bold text-slate-900">Blog House</span>
             </div>
             <a 
               href="/login"
@@ -240,7 +240,7 @@ const Pricing = () => {
             Pronto para começar?
           </h2>
           <p className="text-xl text-slate-300 mb-8">
-            Junte-se a centenas de blogueiros que já monetizam com a 8blogs
+            Junte-se a centenas de blogueiros que já monetizam com o Blog House
           </p>
           <button 
             className="bg-red-600 hover:bg-red-700 text-white font-semibold py-4 px-8 rounded-2xl text-lg transition-colors duration-200"

@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface ISettingsDocument extends Document {
   category: string;
@@ -9,6 +9,12 @@ export interface ISettingsDocument extends Document {
   updatedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ISettingsModel extends Model<ISettingsDocument> {
+  getSetting(category: string, key: string): Promise<any>;
+  setSetting(category: string, key: string, value: any, updatedBy?: string, description?: string): Promise<ISettingsDocument>;
+  getCategorySettings(category: string): Promise<Record<string, any>>;
 }
 
 const settingsSchema = new Schema<ISettingsDocument>({
@@ -92,4 +98,4 @@ settingsSchema.statics.getCategorySettings = async function(category: string) {
   return result;
 };
 
-export const Settings = mongoose.model<ISettingsDocument>('Settings', settingsSchema);
+export const Settings = mongoose.model<ISettingsDocument, ISettingsModel>('Settings', settingsSchema);

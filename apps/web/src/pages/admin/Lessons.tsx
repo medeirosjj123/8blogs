@@ -139,7 +139,7 @@ export default function AdminLessons() {
             </div>
           ))}
         </div>
-      ) : lessons && lessons.length > 0 ? (
+      ) : (Array.isArray(lessons) && lessons.length > 0) ? (
         <div className="space-y-4">
           {lessons.sort((a: any, b: any) => a.order - b.order).map((lesson: any, index: number) => (
             <div key={lesson._id} className="bg-slate-900 rounded-lg p-6 border border-slate-800 hover:border-coral/50 transition-colors">

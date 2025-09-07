@@ -173,7 +173,7 @@ export default function AdminModules() {
             </div>
           ))}
         </div>
-      ) : modules && modules.length > 0 ? (
+      ) : (Array.isArray(modules) && modules.length > 0) ? (
         <div className="space-y-4">
           {modules.sort((a: any, b: any) => a.order - b.order).map((module: any, index: number) => (
             <div key={module._id} className="bg-slate-900 rounded-lg border border-slate-800 hover:border-coral/50 transition-colors">

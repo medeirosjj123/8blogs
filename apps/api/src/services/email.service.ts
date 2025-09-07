@@ -54,7 +54,7 @@ class ElasticEmailProvider implements EmailProvider {
         }).toString()
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       if (response.ok && data.success) {
         return { 
@@ -85,7 +85,7 @@ class ElasticEmailProvider implements EmailProvider {
         }).toString()
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       if (response.ok && data.success) {
         return { 
@@ -144,7 +144,7 @@ class BrevoProvider implements EmailProvider {
         })
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       if (response.ok) {
         return { 
@@ -173,7 +173,7 @@ class BrevoProvider implements EmailProvider {
         }
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       if (response.ok) {
         return { 
@@ -194,27 +194,203 @@ class BrevoProvider implements EmailProvider {
   }
 }
 
-// Main Email Service
+// SendGrid Provider
+class SendGridProvider implements EmailProvider {
+  name = 'sendgrid';
+  private apiKey: string;
+  private apiUrl = 'https://api.sendgrid.com/v3';
+  private defaultFrom: string;
+
+  constructor(apiKey: string, defaultFrom: string) {
+    this.apiKey = apiKey;
+    this.defaultFrom = defaultFrom;
+  }
+
+  async send(options: EmailOptions) {
+    try {
+      const response = await fetch(`${this.apiUrl}/mail/send`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: { email: options.from || this.defaultFrom },
+          personalizations: [{
+            to: Array.isArray(options.to) 
+              ? options.to.map(email => ({ email }))
+              : [{ email: options.to }],
+            ...(options.cc && { cc: options.cc.map(email => ({ email })) }),
+            ...(options.bcc && { bcc: options.bcc.map(email => ({ email })) })
+          }],
+          subject: options.subject,
+          content: [
+            ...(options.text ? [{ type: 'text/plain', value: options.text }] : []),
+            ...(options.html ? [{ type: 'text/html', value: options.html }] : [])
+          ],
+          ...(options.replyTo && { reply_to: { email: options.replyTo } })
+        })
+      });
+
+      if (response.ok) {
+        return { 
+          success: true, 
+          messageId: response.headers.get('X-Message-Id') || 'sendgrid-sent' 
+        };
+      } else {
+        const errorData = await response.text();
+        throw new Error(errorData || 'Failed to send email');
+      }
+    } catch (error: any) {
+      console.error('SendGrid send error:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Failed to send email via SendGrid' 
+      };
+    }
+  }
+
+  async testConnection() {
+    try {
+      const response = await fetch(`${this.apiUrl}/user/profile`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json() as any;
+        return { 
+          success: true,
+          accountEmail: data.email,
+          username: data.username
+        };
+      } else {
+        throw new Error('Invalid API key');
+      }
+    } catch (error: any) {
+      console.error('SendGrid test connection error:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Failed to connect to SendGrid' 
+      };
+    }
+  }
+}
+
+// AWS SES Provider
+class AWSSESProvider implements EmailProvider {
+  name = 'aws-ses';
+  private accessKeyId: string;
+  private secretAccessKey: string;
+  private region: string;
+  private defaultFrom: string;
+
+  constructor(accessKeyId: string, secretAccessKey: string, region: string, defaultFrom: string) {
+    this.accessKeyId = accessKeyId;
+    this.secretAccessKey = secretAccessKey;
+    this.region = region;
+    this.defaultFrom = defaultFrom;
+  }
+
+  async send(options: EmailOptions) {
+    try {
+      // This is a simplified implementation - in production you'd use AWS SDK
+      const endpoint = `https://email.${this.region}.amazonaws.com/`;
+      const service = 'ses';
+      const host = `email.${this.region}.amazonaws.com`;
+      
+      // For now, return success but log that AWS SES needs proper SDK implementation
+      console.warn('AWS SES provider needs AWS SDK implementation for production use');
+      
+      return { 
+        success: false, 
+        error: 'AWS SES provider requires AWS SDK implementation' 
+      };
+    } catch (error: any) {
+      console.error('AWS SES send error:', error);
+      return { 
+        success: false, 
+        error: error.message || 'Failed to send email via AWS SES' 
+      };
+    }
+  }
+
+  async testConnection() {
+    return { 
+      success: false, 
+      error: 'AWS SES provider requires AWS SDK implementation' 
+    };
+  }
+}
+
+// Main Email Service with Fallback Support
 class EmailService {
-  private provider: EmailProvider | null = null;
+  private providers: EmailProvider[] = [];
+  private currentProviderIndex: number = 0;
 
   async initialize() {
     try {
-      // First, try to get from environment variables (preferred for production)
-      let provider = process.env.EMAIL_SERVICE || 'brevo';
-      let apiKey = '';
-      let fromEmail = process.env.EMAIL_FROM_ADDRESS || 'noreply@bloghouse.com.br';
-      let fromName = process.env.EMAIL_FROM_NAME || 'Blog House';
+      this.providers = [];
+      this.currentProviderIndex = 0;
+      
+      const fromEmail = process.env.BREVO_SENDER_EMAIL || process.env.EMAIL_FROM_ADDRESS || 'noreply@bloghouse.com.br';
+      const fromName = process.env.BREVO_SENDER_NAME || process.env.EMAIL_FROM_NAME || 'Blog House';
+      const defaultFrom = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
 
-      // Get API key based on provider
-      if (provider === 'brevo') {
-        apiKey = process.env.BREVO_API_KEY || '';
-      } else if (provider === 'elasticemail') {
-        apiKey = process.env.ELASTIC_EMAIL_API_KEY || '';
+      // Initialize all available providers in priority order
+      const providerConfigs = [
+        {
+          name: 'brevo',
+          apiKey: process.env.BREVO_API_KEY,
+          createProvider: (apiKey: string) => new BrevoProvider(apiKey, defaultFrom)
+        },
+        {
+          name: 'sendgrid', 
+          apiKey: process.env.SENDGRID_API_KEY,
+          createProvider: (apiKey: string) => new SendGridProvider(apiKey, defaultFrom)
+        },
+        {
+          name: 'elasticemail',
+          apiKey: process.env.ELASTIC_EMAIL_API_KEY,
+          createProvider: (apiKey: string) => new ElasticEmailProvider(apiKey, defaultFrom)
+        },
+        {
+          name: 'aws-ses',
+          apiKey: process.env.AWS_ACCESS_KEY_ID,
+          createProvider: (apiKey: string) => new AWSSESProvider(
+            process.env.AWS_ACCESS_KEY_ID || '',
+            process.env.AWS_SECRET_ACCESS_KEY || '',
+            process.env.AWS_REGION || 'us-east-1',
+            defaultFrom
+          )
+        }
+      ];
+
+      // Add configured providers to the fallback chain
+      for (const config of providerConfigs) {
+        if (config.apiKey) {
+          try {
+            const provider = config.createProvider(config.apiKey);
+            const test = await provider.testConnection();
+            
+            if (test.success) {
+              this.providers.push(provider);
+              console.info(`✅ ${config.name} provider configured successfully`);
+            } else {
+              console.warn(`⚠️ ${config.name} provider test failed: ${test.error}`);
+              // Still add to providers array as fallback (might work for sending even if test fails)
+              this.providers.push(provider);
+            }
+          } catch (error) {
+            console.warn(`❌ Failed to initialize ${config.name} provider:`, error);
+          }
+        }
       }
 
-      // If no env vars, fall back to database settings
-      if (!apiKey || !fromEmail) {
+      // Fall back to database settings if no environment providers
+      if (this.providers.length === 0) {
         try {
           const dbProvider = await Settings.getSetting('email', 'provider');
           const dbApiKey = await Settings.getSetting('email', 'apiKey');
@@ -222,46 +398,36 @@ class EmailService {
           const dbFromName = await Settings.getSetting('email', 'fromName');
 
           if (dbProvider && dbApiKey && dbFromEmail) {
-            provider = dbProvider;
-            apiKey = dbApiKey;
-            fromEmail = dbFromEmail;
-            fromName = dbFromName || 'Blog House';
-            console.info('Using email configuration from database');
+            const dbDefaultFrom = dbFromName ? `${dbFromName} <${dbFromEmail}>` : dbFromEmail;
+            
+            let dbProviderInstance: EmailProvider | null = null;
+            switch (dbProvider) {
+              case 'elasticemail':
+                dbProviderInstance = new ElasticEmailProvider(dbApiKey, dbDefaultFrom);
+                break;
+              case 'brevo':
+                dbProviderInstance = new BrevoProvider(dbApiKey, dbDefaultFrom);
+                break;
+              case 'sendgrid':
+                dbProviderInstance = new SendGridProvider(dbApiKey, dbDefaultFrom);
+                break;
+            }
+            
+            if (dbProviderInstance) {
+              this.providers.push(dbProviderInstance);
+              console.info(`✅ Using email configuration from database (${dbProvider})`);
+            }
           }
         } catch (dbError) {
           console.warn('Could not fetch email settings from database:', dbError);
         }
+      }
+
+      if (this.providers.length === 0) {
+        console.error('❌ No email providers configured');
       } else {
-        console.info('Using email configuration from environment variables');
-      }
-
-      if (!apiKey || !fromEmail) {
-        console.warn('Email service not configured - no API key or from email');
-        return;
-      }
-
-      const defaultFrom = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
-
-      switch (provider) {
-        case 'elasticemail':
-          this.provider = new ElasticEmailProvider(apiKey, defaultFrom);
-          break;
-        case 'brevo':
-          this.provider = new BrevoProvider(apiKey, defaultFrom);
-          break;
-        default:
-          console.warn(`Unknown email provider: ${provider}`);
-      }
-
-      if (this.provider) {
-        const test = await this.provider.testConnection();
-        if (test.success) {
-          console.info(`✅ Email service initialized successfully with ${provider}`);
-        } else {
-          console.error(`Failed to initialize email service: ${test.error}`);
-          // Don't null the provider - let it try to send anyway
-          console.warn('⚠️ Continuing with email provider despite connection test failure');
-        }
+        console.info(`📧 Email service initialized with ${this.providers.length} provider(s):`, 
+          this.providers.map(p => p.name).join(', '));
       }
     } catch (error) {
       console.error('Failed to initialize email service:', error);
@@ -269,38 +435,104 @@ class EmailService {
   }
 
   async send(options: EmailOptions) {
-    if (!this.provider) {
+    if (this.providers.length === 0) {
       await this.initialize();
     }
 
-    if (!this.provider) {
-      console.error('Email provider not configured');
+    if (this.providers.length === 0) {
+      console.error('No email providers configured');
       return { 
         success: false, 
-        error: 'Email service not configured' 
+        error: 'No email providers configured' 
       };
     }
 
-    return this.provider.send(options);
+    // Try each provider in order until one succeeds
+    let lastError = 'All providers failed';
+    
+    for (let attempt = 0; attempt < this.providers.length; attempt++) {
+      const provider = this.providers[this.currentProviderIndex];
+      
+      try {
+        console.info(`📧 Attempting to send email via ${provider.name}`);
+        const result = await provider.send(options);
+        
+        if (result.success) {
+          console.info(`✅ Email sent successfully via ${provider.name}`);
+          return result;
+        } else {
+          console.warn(`⚠️ ${provider.name} failed: ${result.error}`);
+          lastError = result.error || `${provider.name} failed`;
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`❌ ${provider.name} threw error:`, errorMsg);
+        lastError = errorMsg;
+      }
+      
+      // Move to next provider for next attempt
+      this.currentProviderIndex = (this.currentProviderIndex + 1) % this.providers.length;
+    }
+    
+    console.error(`❌ All email providers failed. Last error: ${lastError}`);
+    return { 
+      success: false, 
+      error: `All email providers failed. Last error: ${lastError}` 
+    };
   }
 
   async testConnection() {
-    if (!this.provider) {
+    if (this.providers.length === 0) {
       await this.initialize();
     }
 
-    if (!this.provider) {
+    if (this.providers.length === 0) {
       return { 
         success: false, 
-        error: 'Email service not configured' 
+        error: 'No email providers configured' 
       };
     }
 
-    return this.provider.testConnection();
+    // Test all providers and return aggregated results
+    const results = [];
+    
+    for (const provider of this.providers) {
+      try {
+        const result = await provider.testConnection();
+        results.push({
+          provider: provider.name,
+          success: result.success,
+          error: result.error
+        });
+      } catch (error) {
+        results.push({
+          provider: provider.name,
+          success: false,
+          error: error instanceof Error ? error.message : 'Test failed'
+        });
+      }
+    }
+    
+    const workingProviders = results.filter(r => r.success);
+    
+    return {
+      success: workingProviders.length > 0,
+      error: workingProviders.length === 0 ? 'No providers are working' : undefined,
+      providers: results
+    };
+  }
+
+  // Get current provider status for debugging
+  getProviderStatus() {
+    return {
+      totalProviders: this.providers.length,
+      currentProvider: this.providers[this.currentProviderIndex]?.name || 'none',
+      providerNames: this.providers.map(p => p.name)
+    };
   }
 
   async sendPasswordResetEmail(email: string, resetToken: string, userName?: string) {
-    const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
     
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -333,7 +565,7 @@ class EmailService {
   }
 
   async sendWelcomeEmail(email: string, userName: string) {
-    const loginUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/login`;
+    const loginUrl = `${process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'}/login`;
     
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -373,7 +605,7 @@ class EmailService {
   }
 
   async sendMagicLinkEmail(email: string, token: string, userName?: string) {
-    const magicLinkUrl = `${process.env.CLIENT_URL || 'http://localhost:5173'}/auth/magic-link?token=${token}`;
+    const magicLinkUrl = `${process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/magic-link?token=${token}`;
     
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -420,7 +652,7 @@ class EmailService {
         <p>Este é um email de teste enviado do painel administrativo.</p>
         <p>Se você recebeu este email, a configuração está funcionando corretamente! 🎉</p>
         <div style="background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding: 20px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #6366F1;">
-          <p style="margin: 0; margin-bottom: 10px;"><strong>✅ Provedor:</strong> ${this.provider?.name || 'Não configurado'}</p>
+          <p style="margin: 0; margin-bottom: 10px;"><strong>✅ Provedor:</strong> ${this.providers[0]?.name || 'Não configurado'}</p>
           <p style="margin: 0; margin-bottom: 10px;"><strong>⏰ Data/Hora:</strong> ${new Date().toLocaleString('pt-BR')}</p>
           <p style="margin: 0;"><strong>🌐 Ambiente:</strong> ${process.env.NODE_ENV || 'development'}</p>
         </div>

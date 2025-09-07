@@ -1,4 +1,5 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../middlewares/authMiddleware';
 import { User } from '../models/User';
 import { Course } from '../models/Course';
 import { Module } from '../models/Module';
@@ -8,7 +9,7 @@ import { emailService } from '../services/email.service';
 import mongoose from 'mongoose';
 
 // Dashboard Statistics
-export const getDashboardStats = async (req: Request, res: Response) => {
+export const getDashboardStats = async (req: AuthRequest, res: Response) => {
   try {
     const [
       totalUsers,
@@ -87,7 +88,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 };
 
 // User Management
-export const getUsers = async (req: Request, res: Response) => {
+export const getUsers = async (req: AuthRequest, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -131,18 +132,24 @@ export const getUsers = async (req: Request, res: Response) => {
   }
 };
 
-export const updateUserRole = async (req: Request, res: Response) => {
+export const updateUserRole = async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
     const { role } = req.body;
 
-    if (!['aluno', 'mentor', 'moderador', 'admin'].includes(role)) {
+    if (!['starter', 'pro', 'black_belt', 'admin'].includes(role)) {
       return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    // Get subscription settings for the new role (unless admin)
+    const updateData: any = { role };
+    if (role !== 'admin') {
+      updateData.subscription = getSubscriptionForRole(role);
     }
 
     const user = await User.findByIdAndUpdate(
       userId,
-      { role },
+      updateData,
       { new: true }
     ).select('-passwordHash');
 
@@ -150,7 +157,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    console.log(`Admin ${req.user.email} updated user ${user.email} role to ${role}`);
+    console.log(`Admin ${req.user.email} updated user ${user.email} role to ${role} with subscription plan ${updateData.subscription?.plan || 'unchanged'}`);
 
     res.json({ success: true, data: user });
   } catch (error) {
@@ -159,7 +166,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteUser = async (req: Request, res: Response) => {
+export const deleteUser = async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
 
@@ -185,7 +192,50 @@ export const deleteUser = async (req: Request, res: Response) => {
   }
 };
 
-export const createUser = async (req: Request, res: Response) => {
+// Helper function to get subscription settings based on role
+const getSubscriptionForRole = (role: string) => {
+  switch (role) {
+    case 'black_belt':
+      return {
+        plan: 'black_belt' as const,
+        blogsLimit: -1, // unlimited
+        reviewsLimit: -1, // unlimited
+        features: {
+          bulkUpload: true,
+          weeklyCalls: true,
+          coursesAccess: true,
+          prioritySupport: true
+        }
+      };
+    case 'pro':
+      return {
+        plan: 'pro' as const,
+        blogsLimit: 5,
+        reviewsLimit: 100,
+        features: {
+          bulkUpload: false,
+          weeklyCalls: true,
+          coursesAccess: false,
+          prioritySupport: true
+        }
+      };
+    case 'starter':
+    default:
+      return {
+        plan: 'starter' as const,
+        blogsLimit: 1,
+        reviewsLimit: 30,
+        features: {
+          bulkUpload: false,
+          weeklyCalls: false,
+          coursesAccess: false,
+          prioritySupport: false
+        }
+      };
+  }
+};
+
+export const createUser = async (req: AuthRequest, res: Response) => {
   try {
     const { name, email, password, role, isActive } = req.body;
 
@@ -199,19 +249,23 @@ export const createUser = async (req: Request, res: Response) => {
     const bcrypt = require('bcryptjs');
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Get subscription settings for the role
+    const subscription = getSubscriptionForRole(role || 'starter');
+
     // Create new user
     const user = new User({
       name,
       email,
       passwordHash,
-      role: role || 'aluno',
+      role: role || 'starter',
       isActive: isActive !== false,
-      emailVerified: true // Set as verified since admin is creating
+      emailVerified: true, // Set as verified since admin is creating
+      subscription
     });
 
     await user.save();
 
-    console.log(`Admin ${req.user.email} created user ${user.email} with role ${user.role}`);
+    console.log(`Admin ${req.user?.email || 'unknown'} created user ${user.email} with role ${user.role}`);
 
     res.status(201).json({ 
       success: true, 
@@ -230,7 +284,7 @@ export const createUser = async (req: Request, res: Response) => {
   }
 };
 
-export const updateUser = async (req: Request, res: Response) => {
+export const updateUser = async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
     const { name, email, password, role, isActive } = req.body;
@@ -273,7 +327,7 @@ export const updateUser = async (req: Request, res: Response) => {
   }
 };
 
-export const resetUserPassword = async (req: Request, res: Response) => {
+export const resetUserPassword = async (req: AuthRequest, res: Response) => {
   try {
     const { userId } = req.params;
     const { password } = req.body;
@@ -314,7 +368,7 @@ export const resetUserPassword = async (req: Request, res: Response) => {
   }
 };
 
-export const sendPasswordResetEmail = async (req: Request, res: Response) => {
+export const sendPasswordResetEmail = async (req: AuthRequest, res: Response) => {
   try {
     const { email } = req.body;
 
@@ -355,7 +409,7 @@ export const sendPasswordResetEmail = async (req: Request, res: Response) => {
 };
 
 // Course Management
-export const getCourses = async (req: Request, res: Response) => {
+export const getCourses = async (req: AuthRequest, res: Response) => {
   try {
     const courses = await Course.find()
       .populate('modules', 'title description order')
@@ -368,7 +422,7 @@ export const getCourses = async (req: Request, res: Response) => {
   }
 };
 
-export const createCourse = async (req: Request, res: Response) => {
+export const createCourse = async (req: AuthRequest, res: Response) => {
   try {
     console.log('Creating course with data:', req.body);
     console.log('Thumbnail received:', req.body.thumbnail);
@@ -390,7 +444,7 @@ export const createCourse = async (req: Request, res: Response) => {
   }
 };
 
-export const updateCourse = async (req: Request, res: Response) => {
+export const updateCourse = async (req: AuthRequest, res: Response) => {
   try {
     const { courseId } = req.params;
     console.log('Updating course with ID:', courseId);
@@ -416,7 +470,7 @@ export const updateCourse = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteCourse = async (req: Request, res: Response) => {
+export const deleteCourse = async (req: AuthRequest, res: Response) => {
   try {
     const { courseId } = req.params;
 
@@ -447,7 +501,7 @@ export const deleteCourse = async (req: Request, res: Response) => {
 };
 
 // Module Management
-export const getModules = async (req: Request, res: Response) => {
+export const getModules = async (req: AuthRequest, res: Response) => {
   try {
     const { courseId } = req.params;
 
@@ -462,7 +516,7 @@ export const getModules = async (req: Request, res: Response) => {
   }
 };
 
-export const createModule = async (req: Request, res: Response) => {
+export const createModule = async (req: AuthRequest, res: Response) => {
   try {
     const { courseId } = req.params;
 
@@ -494,7 +548,7 @@ export const createModule = async (req: Request, res: Response) => {
   }
 };
 
-export const updateModule = async (req: Request, res: Response) => {
+export const updateModule = async (req: AuthRequest, res: Response) => {
   try {
     const { moduleId } = req.params;
 
@@ -517,7 +571,7 @@ export const updateModule = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteModule = async (req: Request, res: Response) => {
+export const deleteModule = async (req: AuthRequest, res: Response) => {
   try {
     const { moduleId } = req.params;
 
@@ -546,7 +600,7 @@ export const deleteModule = async (req: Request, res: Response) => {
 };
 
 // Lesson Management
-export const getLessons = async (req: Request, res: Response) => {
+export const getLessons = async (req: AuthRequest, res: Response) => {
   try {
     const { moduleId } = req.params;
 
@@ -560,7 +614,7 @@ export const getLessons = async (req: Request, res: Response) => {
   }
 };
 
-export const createLesson = async (req: Request, res: Response) => {
+export const createLesson = async (req: AuthRequest, res: Response) => {
   try {
     const { moduleId } = req.params;
 
@@ -640,7 +694,7 @@ export const createLesson = async (req: Request, res: Response) => {
   }
 };
 
-export const updateLesson = async (req: Request, res: Response) => {
+export const updateLesson = async (req: AuthRequest, res: Response) => {
   try {
     const { lessonId } = req.params;
 
@@ -712,7 +766,7 @@ export const updateLesson = async (req: Request, res: Response) => {
   }
 };
 
-export const deleteLesson = async (req: Request, res: Response) => {
+export const deleteLesson = async (req: AuthRequest, res: Response) => {
   try {
     const { lessonId } = req.params;
 

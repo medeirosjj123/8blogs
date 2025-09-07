@@ -1,6 +1,7 @@
 import Cookies from 'js-cookie';
+import { tokenManager } from './api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:3001') + '/api';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -10,19 +11,17 @@ interface ApiResponse<T> {
 
 class AdminService {
   private getAuthHeaders() {
-    const cookieToken = Cookies.get('access_token');
-    const localToken = localStorage.getItem('token');
-    const token = cookieToken || localToken;
+    const token = tokenManager.getAccessToken();
     
-    console.log('Admin Service - Getting token:', {
-      cookieToken,
-      localToken,
-      finalToken: token
-    });
+    console.log('Admin Service - Getting token:', token ? 'Present' : 'Missing');
+    
+    if (!token) {
+      console.warn('Admin Service - No authentication token found');
+    }
     
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      'Authorization': `Bearer ${token || ''}`
     };
   }
 
@@ -36,18 +35,34 @@ class AdminService {
     });
 
     const data: ApiResponse<T> = await response.json();
+    
+    console.log('Admin Service - Full Response:', {
+      endpoint,
+      status: response.status,
+      success: data.success,
+      hasData: !!data.data,
+      dataType: typeof data.data,
+      dataKeys: data.data && typeof data.data === 'object' ? Object.keys(data.data) : null,
+      fullData: data
+    });
 
     if (!response.ok) {
       throw new Error(data.message || `HTTP error! status: ${response.status}`);
     }
 
-    // Most endpoints return data in data.data
-    if (data.data !== undefined) {
+    // For successful responses, return the data field if it exists
+    if (data.data !== undefined && data.data !== null) {
+      console.log('Admin Service - Returning data.data:', data.data);
       return data.data as T;
     }
     
-    // Some endpoints might return the whole response
-    return data as unknown as T;
+    // Fallback: return the whole response if success is true
+    if (data.success) {
+      console.log('Admin Service - Returning full data:', data);
+      return data as unknown as T;
+    }
+    
+    throw new Error('Invalid response format');
   }
 
   // Dashboard Stats

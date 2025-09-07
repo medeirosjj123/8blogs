@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import authService from '../services/auth.service';
 import { useUserStats, useUpdateProfile } from '../hooks/useUserStats';
 import { AvatarUpload } from '../components/profile/AvatarUpload';
 import { ActivityTimeline } from '../components/profile/ActivityTimeline';
@@ -516,6 +517,115 @@ export const Profile: React.FC = () => {
 
             {activeTab === 'settings' && (
               <div className="space-y-6">
+                {/* Account Settings */}
+                <div className="bg-gray-50 rounded-2xl p-6">
+                  <h2 className="text-xl font-bold text-gray-900 mb-6">Configurações da Conta</h2>
+                  <p className="text-gray-600 mb-8">Gerencie suas informações pessoais e segurança.</p>
+                  
+                  {/* Account Information */}
+                  <div className="mb-8">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <User className="w-5 h-5 text-coral" />
+                      Informações da Conta
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Nome</label>
+                        <div className="p-3 bg-white rounded-lg border border-gray-200">
+                          {user?.name}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                        <div className="p-3 bg-white rounded-lg border border-gray-200">
+                          {user?.email}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Security Settings */}
+                  <div className="mb-8 border-t pt-8">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-coral" />
+                      Segurança
+                    </h3>
+                    <div className="space-y-4">
+                      {/* Change Password */}
+                      <div className="bg-white rounded-lg border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-900">Alterar Senha</h4>
+                            <p className="text-sm text-gray-600">Use o sistema de Magic Link para alterar sua senha</p>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              if (user?.email) {
+                                try {
+                                  await authService.requestMagicLink(user.email);
+                                  toast.success('Magic Link enviado para seu email! Use o link para fazer login com nova senha.');
+                                } catch (error) {
+                                  toast.error('Erro ao enviar magic link. Tente novamente.');
+                                }
+                              }
+                            }}
+                            className="px-4 py-2 text-sm bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
+                          >
+                            Enviar Magic Link
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Login History */}
+                      <div className="bg-white rounded-lg border border-gray-200 p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-900">Último Login</h4>
+                            <p className="text-sm text-gray-600">
+                              {user?.lastLoginAt 
+                                ? formatDistanceToNow(new Date(user.lastLoginAt), { addSuffix: true, locale: ptBR })
+                                : 'Nunca'
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Subscription Info */}
+                  <div className="mb-8 border-t pt-8">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <Award className="w-5 h-5 text-coral" />
+                      Plano e Assinatura
+                    </h3>
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900">
+                            Plano {user?.subscription?.plan ? user.subscription.plan.charAt(0).toUpperCase() + user.subscription.plan.slice(1) : 'Starter'}
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            {user?.subscription?.blogsLimit === -1 
+                              ? 'Blogs ilimitados' 
+                              : `${user?.subscription?.blogsLimit || 1} ${(user?.subscription?.blogsLimit || 1) === 1 ? 'blog' : 'blogs'} incluídos`
+                            }
+                          </p>
+                        </div>
+                        {user?.subscription?.plan !== 'black_belt' && (
+                          <Link
+                            to="/precos"
+                            className="px-4 py-2 text-sm bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
+                          >
+                            Upgrade
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tool Settings */}
                 <div className="bg-gray-50 rounded-2xl p-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-6">Configurações de Ferramentas</h2>
                   <p className="text-gray-600 mb-8">Configure suas credenciais para usar as ferramentas de criação de conteúdo.</p>

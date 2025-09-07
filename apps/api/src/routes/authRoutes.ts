@@ -16,7 +16,7 @@ import {
 } from '../controllers/googleAuthController';
 import { uploadAvatar, handleAvatarUpload, deleteAvatar } from '../controllers/avatarController';
 import { authenticate } from '../middlewares/authMiddleware';
-import { authRateLimiter } from '../middlewares/rateLimiter';
+import { authRateLimiter, magicLinkRateLimiter } from '../middlewares/rateLimiter';
 import { checkDatabaseConnection } from '../middlewares/checkDatabase';
 
 const router = Router();
@@ -47,7 +47,7 @@ router.put('/notification-preferences', authenticate, updateNotificationPreferen
 router.put('/change-password', authenticate, changePassword);
 
 // Magic link authentication
-router.post('/request-magic-link', authRateLimiter, requestMagicLink);
+router.post('/request-magic-link', magicLinkRateLimiter, requestMagicLink);
 router.get('/magic-link', magicLinkLogin);
 
 // Google OAuth

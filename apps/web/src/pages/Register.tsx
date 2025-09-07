@@ -31,19 +31,19 @@ export const Register: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sand-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center mb-6">
-          <div className="w-12 h-12 bg-gradient-to-br from-coral to-coral-dark rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-xl">8</span>
+          <div className="w-16 h-16 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center shadow-lg">
+            <span className="text-white font-bold text-2xl">BH</span>
           </div>
         </div>
-        <h2 className="text-center text-2xl font-bold text-slate-900">
-          Comece a monetizar com blogs
+        <h2 className="text-center text-3xl font-bold text-slate-900">
+          Entre no Blog House
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
           Já tem uma conta?{' '}
-          <Link to="/login" className="font-medium text-coral hover:text-coral-dark">
+          <Link to="/login" className="font-medium text-red-600 hover:text-red-700">
             Faça login
           </Link>
         </p>
@@ -66,7 +66,7 @@ export const Register: React.FC = () => {
                   required
                   value={formData.name}
                   onChange={handleChange}
-                  className="appearance-none block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-coral/20 focus:border-coral transition-all"
+                  className="appearance-none block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 transition-all"
                   placeholder="João Silva"
                 />
               </div>
@@ -86,7 +86,7 @@ export const Register: React.FC = () => {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  className="appearance-none block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-coral/20 focus:border-coral transition-all"
+                  className="appearance-none block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 transition-all"
                   placeholder="seu@email.com"
                 />
               </div>
@@ -106,7 +106,7 @@ export const Register: React.FC = () => {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="appearance-none block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-coral/20 focus:border-coral transition-all"
+                  className="appearance-none block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 transition-all"
                   placeholder="Mínimo 8 caracteres"
                 />
               </div>
@@ -126,7 +126,7 @@ export const Register: React.FC = () => {
                   required
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="appearance-none block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-coral/20 focus:border-coral transition-all"
+                  className="appearance-none block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 transition-all"
                   placeholder="Repita a senha"
                 />
               </div>
@@ -138,15 +138,15 @@ export const Register: React.FC = () => {
                 name="terms"
                 type="checkbox"
                 required
-                className="h-4 w-4 text-coral border-slate-300 rounded focus:ring-coral"
+                className="h-4 w-4 text-red-600 border-slate-300 rounded focus:ring-red-600"
               />
               <label htmlFor="terms" className="ml-2 block text-sm text-slate-700">
                 Concordo com os{' '}
-                <a href="#" className="text-coral hover:text-coral-dark">
+                <a href="#" className="text-red-600 hover:text-red-700">
                   termos de uso
                 </a>{' '}
                 e{' '}
-                <a href="#" className="text-coral hover:text-coral-dark">
+                <a href="#" className="text-red-600 hover:text-red-700">
                   política de privacidade
                 </a>
               </label>
@@ -156,7 +156,7 @@ export const Register: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-coral to-rose-400 hover:from-coral-dark hover:to-rose-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-coral disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {isLoading ? 'Criando conta...' : 'Criar conta'}
                 {!isLoading && <ArrowRight size={16} className="ml-2" />}
