@@ -306,6 +306,10 @@ export const generateBulkReviews = async (req: AuthRequest, res: Response, next:
                 };
                 await review.save();
                 
+                // Delete review from MongoDB after successful WordPress publish
+                await Review.findByIdAndDelete(review._id);
+                console.log(`  🗑️ Review deleted from MongoDB (WordPress is now the permanent storage)`);
+                
                 console.log(`[WORDPRESS ${globalIndex + 1}] ✅ PUBLISHED SUCCESSFULLY`);
                 console.log(`  Post URL: ${review.publishedTo.postUrl}`);
                 console.log(`  Published At: ${review.publishedAt.toISOString()}`);
@@ -735,6 +739,10 @@ export const publishReview = async (req: AuthRequest, res: Response) => {
     review.status = 'draft';
     await review.save();
 
+    // Delete the review from MongoDB after successful WordPress publish
+    await Review.findByIdAndDelete(targetReviewId);
+    console.log(`🗑️ Review "${review.title}" deleted from MongoDB after WordPress publish`);
+
     // Update site statistics (but don't increment published count for drafts)
     site.statistics = site.statistics || { postsPublished: 0 };
     site.statistics.lastPublishedAt = new Date();
@@ -918,6 +926,10 @@ export const bulkPublishReviews = async (req: AuthRequest, res: Response) => {
         }
         
         await review.save();
+
+        // Delete from MongoDB to free space - mandatory after WordPress publish
+        await Review.findByIdAndDelete(review._id);
+        console.log(`  🗑️ Deleted from MongoDB (WordPress is permanent storage)`);
 
         console.log(`  ✅ Published successfully - ID: ${wpPost.id} (${processingTime}ms)`);
         
