@@ -1,6 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyJWT, extractBearerToken } from '../utils/auth';
 import { User } from '../models/User';
+import pino from 'pino';
+
+const logger = pino({
+  transport: {
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+      translateTime: 'HH:MM:ss Z',
+      ignore: 'pid,hostname'
+    }
+  }
+});
 
 export interface AuthRequest extends Request {
   user?: {
@@ -15,9 +27,11 @@ export async function authenticate(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  let token: string | null = null;
+  
   try {
     // Try to get token from Authorization header first
-    let token = extractBearerToken(req.headers.authorization);
+    token = extractBearerToken(req.headers.authorization);
     
     // If not in header, try cookies
     if (!token && req.cookies?.access_token) {
@@ -30,6 +44,17 @@ export async function authenticate(
     }
     
     if (!token) {
+      logger.warn({
+        url: req.url,
+        method: req.method,
+        cookies: req.cookies ? Object.keys(req.cookies) : [],
+        headers: {
+          authorization: req.headers.authorization ? 'present' : 'missing',
+          cookie: req.headers.cookie ? 'present' : 'missing'
+        },
+        remoteAddress: req.ip || req.connection.remoteAddress
+      }, 'Authentication failed: No token provided');
+      
       res.status(401).json({
         error: 'Unauthorized',
         message: 'No authentication token provided'
@@ -43,6 +68,13 @@ export async function authenticate(
     const user = await User.findById(payload.userId);
     
     if (!user) {
+      logger.warn({
+        userId: payload.userId,
+        email: payload.email,
+        url: req.url,
+        method: req.method
+      }, 'Authentication failed: User not found in database');
+      
       res.status(401).json({
         error: 'Unauthorized',
         message: 'User not found'
@@ -59,6 +91,14 @@ export async function authenticate(
     
     next();
   } catch (error) {
+    logger.warn({
+      error: error instanceof Error ? error.message : 'Unknown error',
+      url: req.url,
+      method: req.method,
+      hasToken: !!token,
+      tokenSource: req.headers.authorization ? 'header' : req.cookies?.access_token ? 'cookie' : 'query'
+    }, 'Authentication failed: Token verification error');
+    
     res.status(401).json({
       error: 'Unauthorized',
       message: 'Invalid or expired token'

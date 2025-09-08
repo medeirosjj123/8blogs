@@ -39,47 +39,65 @@ export interface ReviewGenerationJobData {
 }
 
 class ReviewQueueService {
-  private queue: Queue;
-  private worker: Worker;
+  private queue: Queue | null = null;
+  private worker: Worker | null = null;
   private redis: any;
+  private isInitialized: boolean = false;
 
   constructor() {
-    this.redis = getRedisClient();
-    
-    // Create review generation queue
-    const queueRedis = getRedisClient();
-    queueRedis.options.maxRetriesPerRequest = null;
-    
-    this.queue = new Queue('review-generation', {
-      connection: queueRedis,
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000, // Start with 5 second delay
+    try {
+      this.redis = getRedisClient();
+      this.initialize();
+    } catch (error) {
+      logger.error({ error }, 'Failed to initialize ReviewQueueService');
+      this.isInitialized = false;
+    }
+  }
+
+  private async initialize() {
+    try {
+      // Check Redis connection before creating queue
+      const redisStatus = this.redis.status;
+      if (redisStatus !== 'ready' && redisStatus !== 'connecting') {
+        throw new Error(`Redis not available. Status: ${redisStatus}`);
+      }
+
+      // Use the singleton Redis client for both queue and worker
+      this.queue = new Queue('review-generation', {
+        connection: this.redis,
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 5000, // Start with 5 second delay
+          },
+          removeOnComplete: 50, // Keep last 50 successful jobs
+          removeOnFail: 20, // Keep last 20 failed jobs for debugging
+          delay: 0,
         },
-        removeOnComplete: 50, // Keep last 50 successful jobs
-        removeOnFail: 20, // Keep last 20 failed jobs for debugging
-        delay: 0,
-      },
-    });
+      });
 
-    // Create worker to process review generation jobs
-    const workerRedis = getRedisClient();
-    workerRedis.options.maxRetriesPerRequest = null;
-    
-    this.worker = new Worker('review-generation', this.processReviewJob.bind(this), {
-      connection: workerRedis,
-      concurrency: 2, // Process up to 2 review jobs simultaneously
-      removeOnComplete: { count: 50 },
-      removeOnFail: { count: 20 },
-    });
+      // Create worker to process review generation jobs
+      this.worker = new Worker('review-generation', this.processReviewJob.bind(this), {
+        connection: this.redis,
+        concurrency: 2, // Process up to 2 review jobs simultaneously
+        removeOnComplete: { count: 50 },
+        removeOnFail: { count: 20 },
+      });
 
-    this.setupEventHandlers();
-    logger.info('✅ Review generation queue service initialized');
+      this.setupEventHandlers();
+      this.isInitialized = true;
+      logger.info('✅ Review generation queue service initialized');
+    } catch (error) {
+      logger.error({ error }, '❌ Failed to initialize queue service');
+      this.isInitialized = false;
+      // Don't throw - allow the app to start without queue functionality
+    }
   }
 
   private setupEventHandlers() {
+    if (!this.worker) return;
+    
     // Job started
     this.worker.on('active', async (job: Job) => {
       logger.info({ 
@@ -352,6 +370,9 @@ class ReviewQueueService {
     publishToWordPress?: boolean;
     selectedSiteId?: string;
   }) {
+    if (!this.isInitialized || !this.queue) {
+      throw new Error('Queue service is not initialized. Redis may be unavailable.');
+    }
     try {
       // Create job in database first
       const reviewJob = new ReviewGenerationJob({
@@ -582,25 +603,55 @@ class ReviewQueueService {
 
   // Health check and stats
   async getQueueStats() {
-    const waiting = await this.queue.getWaiting();
-    const active = await this.queue.getActive();
-    const completed = await this.queue.getCompleted();
-    const failed = await this.queue.getFailed();
+    if (!this.isInitialized || !this.queue) {
+      return {
+        waiting: 0,
+        active: 0,
+        completed: 0,
+        failed: 0,
+        error: 'Queue service not initialized'
+      };
+    }
+    
+    try {
+      const waiting = await this.queue.getWaiting();
+      const active = await this.queue.getActive();
+      const completed = await this.queue.getCompleted();
+      const failed = await this.queue.getFailed();
 
-    return {
-      waiting: waiting.length,
-      active: active.length,
-      completed: completed.length,
-      failed: failed.length,
-      health: failed.length / (completed.length + failed.length || 1) < 0.1 ? 'healthy' : 'degraded'
-    };
+      return {
+        waiting: waiting.length,
+        active: active.length,
+        completed: completed.length,
+        failed: failed.length,
+        health: failed.length / (completed.length + failed.length || 1) < 0.1 ? 'healthy' : 'degraded'
+      };
+    } catch (error) {
+      logger.error({ error }, 'Error getting queue stats');
+      return {
+        waiting: 0,
+        active: 0,
+        completed: 0,
+        failed: 0,
+        error: 'Failed to get queue stats',
+        health: 'error'
+      };
+    }
   }
 
   // Cleanup and shutdown
   async close() {
-    await this.worker.close();
-    await this.queue.close();
-    logger.info('Review queue service closed');
+    try {
+      if (this.worker) {
+        await this.worker.close();
+      }
+      if (this.queue) {
+        await this.queue.close();
+      }
+      logger.info('Review queue service closed');
+    } catch (error) {
+      logger.error({ error }, 'Error closing review queue service');
+    }
   }
 }
 

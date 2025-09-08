@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
 import { connectDatabase, isDatabaseConnected } from './database';
+import { isRedisHealthy, getRedisInfo } from './utils/redis';
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import webhookRoutes from './routes/webhookRoutes';
@@ -45,7 +46,8 @@ import wordpressSiteRoutes from './routes/wordpressSiteRoutes';
 import callRoutes from './routes/call.routes';
 import { initializeSocketIO } from './socket';
 import { siteInstallationWorker } from './queues/siteInstallationQueue';
-import { reviewQueueService } from './services/reviewQueue.service';
+// Import reviewQueueService conditionally during startup to avoid Redis connection issues
+// import { reviewQueueService } from './services/reviewQueue.service';
 import { getInstallationScript, reportInstallationProgress } from './controllers/siteInstallerController';
 import { ProfileSuggestion } from './models/ProfileSuggestion';
 import { webhookService } from './services/webhookService';
@@ -53,6 +55,54 @@ import { authenticate, AuthRequest } from './middlewares/authMiddleware';
 
 // Load environment variables from project root
 dotenv.config({ path: '.env' });
+
+// Validate critical environment variables
+const validateEnvironment = () => {
+  const requiredEnvVars = [
+    'JWT_SECRET',
+    'MONGODB_URI'
+  ];
+
+  const optionalEnvVars = [
+    'REDIS_URL',
+    'MAGIC_LINK_SECRET',
+    'FRONTEND_URL'
+  ];
+
+  const missing: string[] = [];
+  const warnings: string[] = [];
+
+  // Check required variables
+  for (const envVar of requiredEnvVars) {
+    if (!process.env[envVar]) {
+      missing.push(envVar);
+    }
+  }
+
+  // Check optional but important variables
+  for (const envVar of optionalEnvVars) {
+    if (!process.env[envVar]) {
+      warnings.push(envVar);
+    }
+  }
+
+  if (missing.length > 0) {
+    console.error('❌ CRITICAL ERROR: Missing required environment variables:');
+    missing.forEach(envVar => console.error(`   - ${envVar}`));
+    console.error('');
+    console.error('Please set these environment variables before starting the server.');
+    process.exit(1);
+  }
+
+  if (warnings.length > 0 && process.env.NODE_ENV === 'production') {
+    console.warn('⚠️  WARNING: Missing recommended environment variables for production:');
+    warnings.forEach(envVar => console.warn(`   - ${envVar}`));
+    console.warn('');
+  }
+};
+
+// Validate environment before creating logger
+validateEnvironment();
 
 // Create logger instance
 const logger = pino({
@@ -1075,6 +1125,19 @@ const startServer = async () => {
     // Initialize webhook service
     webhookService.initialize(app);
     logger.info('🪝 Webhook service initialized');
+    
+    // Initialize review queue service conditionally
+    try {
+      const redisHealthy = isRedisHealthy();
+      if (redisHealthy) {
+        const { reviewQueueService } = await import('./services/reviewQueue.service');
+        logger.info('✅ Review generation queue service initialized');
+      } else {
+        logger.warn('⚠️ Redis not available, review queue service disabled');
+      }
+    } catch (error) {
+      logger.error({ error }, '❌ Failed to initialize review queue service, continuing without queue functionality');
+    }
     
     logger.info(`💬 Socket.IO initialized`);
     
