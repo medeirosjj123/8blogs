@@ -86,7 +86,8 @@ export const InstallationTerminal: React.FC<InstallationTerminalProps> = ({
     console.log('🔧 DEBUG: Frontend completion fix v2 - with enhanced logging');
     
     // Connect to WebSocket
-    const newSocket = io('http://localhost:3001', {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
+    const newSocket = io(socketUrl, {
       withCredentials: true,
       query: {
         installationId
