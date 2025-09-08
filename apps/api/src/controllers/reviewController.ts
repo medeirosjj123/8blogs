@@ -3,6 +3,9 @@ import { reviewGeneratorV2 as reviewGenerator } from '../services/reviewGenerato
 import { Review } from '../models/Review';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { WordPressSite } from '../models/WordPressSite';
+import { reviewQueueService } from '../services/reviewQueue.service';
+import { ReviewGenerationJob } from '../models/ReviewGenerationJob';
+import mongoose from 'mongoose';
 
 // Generate a new review
 export const generateReview = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -998,6 +1001,361 @@ export const bulkPublishReviews = async (req: AuthRequest, res: Response) => {
     res.status(500).json({
       success: false,
       message: 'Failed to bulk publish reviews',
+      error: error.message
+    });
+  }
+};
+
+// ========================= QUEUE-BASED GENERATION =========================
+
+// Helper function to generate single review (used by queue processor)
+export const generateSingleReviewWithData = async (data: {
+  userId: mongoose.Types.ObjectId;
+  title: string;
+  contentType?: 'bbr' | 'spr' | 'informational';
+  products: Array<{
+    name: string;
+    imageUrl?: string;
+    affiliateLink: string;
+    pros: string[];
+    cons: string[];
+    description?: string;
+  }>;
+  outline?: string[];
+}) => {
+  const { userId, title, contentType = 'bbr', products, outline } = data;
+  
+  console.log(`📝 [QUEUE] Generating ${contentType} for user ${userId}: "${title}"`);
+  
+  const review = await reviewGenerator.generateContent({
+    userId: userId.toString(),
+    title,
+    contentType,
+    products: (contentType === 'bbr' || contentType === 'spr') ? products : undefined,
+    outline: outline
+  });
+
+  return review;
+};
+
+// Helper function to publish review to WordPress (used by queue processor)
+export const publishReviewToWordPress = async (
+  reviewId: string,
+  siteId: string,
+  userId: string
+) => {
+  try {
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      throw new Error('Review not found');
+    }
+
+    const site = await WordPressSite.findOne({ 
+      _id: siteId, 
+      userId 
+    }).select('+applicationPassword');
+
+    if (!site) {
+      throw new Error('WordPress site not found');
+    }
+
+    // Get decrypted password
+    const password = site.applicationPassword.includes(':') 
+      ? site.getDecryptedPassword() 
+      : site.applicationPassword;
+    
+    const credentials = Buffer.from(`${site.username}:${password}`).toString('base64');
+
+    // Prepare the post data
+    const postData = {
+      title: review.title,
+      content: review.content?.fullHtml || '',
+      status: 'draft',
+      format: 'standard',
+      categories: [],
+      tags: []
+    };
+
+    // Publish to WordPress
+    const wpResponse = await fetch(`${site.url}/wp-json/wp/v2/posts`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(postData)
+    });
+
+    if (!wpResponse.ok) {
+      const errorText = await wpResponse.text();
+      throw new Error(`WordPress API error: ${wpResponse.status} - ${errorText}`);
+    }
+
+    const wpPost = await wpResponse.json();
+
+    // Create WordPress edit URL
+    const baseUrl = site.url.replace(/\/$/, '');
+    const editUrl = `${baseUrl}/wp-admin/post.php?post=${wpPost.id}&action=edit`;
+
+    // Update review with publication info
+    if (!review.published) {
+      review.published = [];
+    }
+    
+    review.published.push({
+      siteId: site._id,
+      wordpressId: wpPost.id,
+      url: wpPost.link,
+      publishedAt: new Date(),
+      status: 'draft'
+    });
+    
+    review.status = 'draft';
+    await review.save();
+
+    // Also set legacy fields for compatibility
+    review.publishedAt = new Date();
+    review.publishedTo = {
+      platform: 'wordpress',
+      siteId: site._id.toString(),
+      siteDomain: site.url,
+      postUrl: wpPost.link,
+      editUrl: editUrl
+    };
+    await review.save();
+    
+    // Delete review from MongoDB after successful WordPress publish
+    await Review.findByIdAndDelete(review._id);
+
+    return {
+      success: true,
+      url: wpPost.link,
+      editUrl: editUrl,
+      wordpressId: wpPost.id
+    };
+
+  } catch (error: any) {
+    console.error('WordPress publishing error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// Queue bulk review generation (NEW ENDPOINT)
+export const queueBulkReviewGeneration = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    const { reviews, publishToWordPress = false, selectedSiteId } = req.body;
+
+    // Validate input (same validation as original bulk endpoint)
+    if (!reviews || !Array.isArray(reviews) || reviews.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reviews array is required and must not be empty'
+      });
+    }
+
+    if (reviews.length > 50) {
+      return res.status(400).json({
+        success: false,
+        message: 'Maximum 50 reviews allowed per batch'
+      });
+    }
+
+    // Validate each review
+    for (let i = 0; i < reviews.length; i++) {
+      const review = reviews[i];
+      if (!review.title) {
+        return res.status(400).json({
+          success: false,
+          message: `Review ${i + 1}: Title is required`
+        });
+      }
+
+      // Validate content type specific requirements
+      if (review.contentType === 'bbr' || review.contentType === 'spr') {
+        if (!review.products || !Array.isArray(review.products) || review.products.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Review ${i + 1}: Products are required for ${review.contentType} content`
+          });
+        }
+
+        // Validate products
+        for (const product of review.products) {
+          if (!product.name || !product.affiliateLink) {
+            return res.status(400).json({
+              success: false,
+              message: `Review ${i + 1}: Each product must have a name and affiliate link`
+            });
+          }
+        }
+      }
+    }
+
+    // Queue the job
+    const result = await reviewQueueService.queueBulkReviewGeneration({
+      userId: userId,
+      reviewsData: reviews,
+      publishToWordPress,
+      selectedSiteId
+    });
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to queue review generation job',
+        error: result.error
+      });
+    }
+
+    console.log(`🚀 Bulk review generation queued for user ${userId}`);
+    console.log(`   Job ID: ${result.jobId}`);
+    console.log(`   Reviews: ${reviews.length}`);
+    console.log(`   WordPress: ${publishToWordPress ? 'ENABLED' : 'DISABLED'}`);
+
+    res.json({
+      success: true,
+      data: {
+        jobId: result.jobId,
+        bullJobId: result.bullJobId,
+        reviewCount: reviews.length,
+        estimatedTime: result.estimatedTime,
+        publishToWordPress,
+        message: 'Review generation job queued successfully'
+      },
+      message: `${reviews.length} reviews queued for generation`
+    });
+
+  } catch (error: any) {
+    console.error('Error queuing bulk review generation:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to queue review generation',
+      error: error.message
+    });
+  }
+};
+
+// Get job status
+export const getJobStatus = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    const { jobId } = req.params;
+    
+    if (!jobId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Job ID is required'
+      });
+    }
+
+    const result = await reviewQueueService.getJobStatus(jobId);
+
+    if (!result.success) {
+      return res.status(404).json({
+        success: false,
+        message: result.error || 'Job not found'
+      });
+    }
+
+    // Verify job belongs to user
+    const job = await ReviewGenerationJob.findById(jobId);
+    if (!job || job.userId.toString() !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.job,
+      message: 'Job status retrieved successfully'
+    });
+
+  } catch (error: any) {
+    console.error('Error getting job status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get job status',
+      error: error.message
+    });
+  }
+};
+
+// Get user jobs
+export const getUserJobs = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    const limit = parseInt(req.query.limit as string) || 10;
+    const result = await reviewQueueService.getUserJobs(userId, limit);
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.error || 'Failed to get jobs'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        jobs: result.jobs,
+        total: result.jobs.length
+      },
+      message: 'Jobs retrieved successfully'
+    });
+
+  } catch (error: any) {
+    console.error('Error getting user jobs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get jobs',
+      error: error.message
+    });
+  }
+};
+
+// Get queue statistics (admin endpoint)
+export const getQueueStats = async (req: AuthRequest, res: Response) => {
+  try {
+    const stats = await reviewQueueService.getQueueStats();
+
+    res.json({
+      success: true,
+      data: stats,
+      message: 'Queue statistics retrieved successfully'
+    });
+
+  } catch (error: any) {
+    console.error('Error getting queue stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get queue statistics',
       error: error.message
     });
   }

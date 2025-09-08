@@ -45,6 +45,7 @@ import wordpressSiteRoutes from './routes/wordpressSiteRoutes';
 import callRoutes from './routes/call.routes';
 import { initializeSocketIO } from './socket';
 import { siteInstallationWorker } from './queues/siteInstallationQueue';
+import { reviewQueueService } from './services/reviewQueue.service';
 import { getInstallationScript, reportInstallationProgress } from './controllers/siteInstallerController';
 import { ProfileSuggestion } from './models/ProfileSuggestion';
 import { webhookService } from './services/webhookService';

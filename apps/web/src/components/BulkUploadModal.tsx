@@ -5,6 +5,8 @@ import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import { useUsage } from '../hooks/useUsage';
+import { useJobStatus } from '../hooks/useJobStatus';
+import { JobProgressCard } from './JobProgressCard';
 // WordPress Site interface - embedded to avoid Vite caching issues
 interface WordPressSite {
   _id: string;
@@ -90,6 +92,7 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
   const [publishToWordPress, setPublishToWordPress] = useState(true); // Always true now since it's mandatory
   const [generationSummary, setGenerationSummary] = useState<BulkGenerationSummary | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [wordPressPublishModal, setWordPressPublishModal] = useState<{
     isOpen: boolean;
     reviewId: string;
@@ -100,6 +103,71 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
     reviewId: '',
     title: '',
     isPublishing: false
+  });
+
+  // Job status tracking
+  const {
+    job: currentJob,
+    isLoading: jobLoading,
+    error: jobError,
+    startPolling,
+    stopPolling
+  } = useJobStatus({
+    jobId: currentJobId,
+    enabled: !!currentJobId,
+    onComplete: (job) => {
+      console.log('✅ Job completed:', job);
+      setIsProcessing(false);
+      setCurrentStep('results');
+      
+      // Convert job results to the format expected by existing UI
+      const convertedResults = job.results.completed.map(result => ({
+        title: result.title,
+        status: result.status,
+        reviewId: result.reviewId,
+        error: result.error,
+        details: {
+          mongoId: result.reviewId || '',
+          collection: 'reviews',
+          slug: result.title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          aiProvider: 'unknown',
+          aiModel: 'unknown',
+          tokensUsed: 0,
+          cost: 0,
+          generationTime: 0,
+          wordpressUrl: result.wordpressUrl || null,
+          publishedAt: result.generatedAt,
+          preview: {
+            introduction: '',
+            conclusion: '',
+            productCount: 0,
+            contentType: 'bbr',
+            fullContentUrl: result.wordpressUrl || ''
+          }
+        }
+      }));
+      
+      setResults(convertedResults);
+      setGenerationSummary({
+        total: job.results.stats.totalReviews,
+        successful: job.results.stats.successfulReviews,
+        failed: job.results.stats.failedReviews,
+        publishedToWordPress: job.results.completed.filter(r => r.wordpressUrl).length
+      });
+      
+      toast.success(`${job.results.stats.successfulReviews} reviews geradas com sucesso!`);
+    },
+    onProgress: (job) => {
+      console.log('📈 Job progress:', job.progress);
+      // Progress is handled by the JobProgressCard component
+    },
+    onError: (error) => {
+      console.error('❌ Job failed:', error);
+      setIsProcessing(false);
+      setCurrentStep('results');
+      toast.error('Erro na geração de reviews: ' + (error?.message || 'Erro desconhecido'));
+    },
+    pollInterval: 2000
   });
   const [selectedReviews, setSelectedReviews] = useState<Set<number>>(new Set());
   const [isBulkPublishing, setIsBulkPublishing] = useState(false);
@@ -224,9 +292,9 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
       setIsProcessing(true);
 
       try {
-        console.log(`Starting bulk generation of ${reviewsData.length} reviews`);
+        console.log(`🚀 Starting queue-based bulk generation of ${reviewsData.length} reviews`);
         
-        const response = await api.post('/api/reviews/bulk-generate', {
+        const response = await api.post('/api/reviews/queue-bulk-generate', {
           reviews: reviewsData.map(review => ({
             title: review.title,
             contentType: review.contentType || 'bbr',
@@ -237,79 +305,22 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
         });
 
         if (response.data.success) {
-          const bulkResults = response.data.data.results;
-          const summary = response.data.data.summary;
+          const { jobId, reviewCount, estimatedTime } = response.data.data;
           
-          // Log detailed results for debugging
-          console.group('📊 Bulk Generation Results Details');
-          console.log('Bulk ID:', summary.bulkId);
-          console.log('Total Time:', summary.totalTime + 'ms');
-          console.log('Total Tokens:', summary.totalTokens);
-          console.log('Total Cost:', '$' + summary.totalCost?.toFixed(4));
-          console.log('Storage:', summary.storage?.database + '.' + summary.storage?.collection);
-          console.log('Completed:', summary.completedAt);
-          console.log('Results:');
-          bulkResults.forEach((result: any, index: number) => {
-            if (result.status === 'success') {
-              console.log(`  ✓ ${index + 1}. ${result.title}`);
-              console.log(`    MongoDB ID: ${result.details?.mongoId}`);
-              console.log(`    AI Provider: ${result.details?.aiProvider}`);
-              console.log(`    AI Model: ${result.details?.aiModel}`);
-              console.log(`    Tokens: ${result.details?.tokensUsed}`);
-              console.log(`    Cost: $${result.details?.cost?.toFixed(4)}`);
-              console.log(`    Generation Time: ${result.details?.generationTime}ms`);
-              if (result.details?.wordpressUrl) {
-                console.log(`    WordPress: ${result.details.wordpressUrl}`);
-              }
-            } else {
-              console.log(`  ✗ ${index + 1}. ${result.title} - ${result.error}`);
-            }
-          });
-          console.groupEnd();
+          console.log('🎯 Job queued successfully:');
+          console.log('  Job ID:', jobId);
+          console.log('  Reviews:', reviewCount);
+          console.log('  Estimated Time:', estimatedTime, 'seconds');
           
-          // Update results with the actual API response
-          setResults(bulkResults.map((result: any) => ({
-            title: result.title,
-            status: result.status as 'success' | 'error',
-            reviewId: result.reviewId,
-            error: result.error,
-            details: result.details
-          })));
+          // Set the job ID to start polling
+          setCurrentJobId(jobId);
           
-          setGenerationSummary(summary);
-          setIsProcessing(false);
-          setCurrentStep('results');
+          toast.success(`${reviewCount} reviews na fila! Tempo estimado: ${Math.round(estimatedTime / 60)} min`);
           
-          if (summary.successful > 0) {
-            toast.success(`${summary.successful} reviews geradas com sucesso!`);
-            if (summary.publishedToWordPress > 0) {
-              toast.success(`${summary.publishedToWordPress} publicadas no WordPress!`);
-              
-              // If auto-publishing was enabled, redirect to WordPress admin
-              if (publishToWordPress && selectedSiteId) {
-                const site = wordPressSites.find(s => s._id === selectedSiteId);
-                if (site) {
-                  const adminUrl = `${site.url.replace(/\/$/, '')}/wp-admin/edit.php?post_type=post&post_status=draft`;
-                  
-                  setTimeout(() => {
-                    window.open(adminUrl, '_blank');
-                    toast.success(`🎉 Abrindo painel do WordPress com ${summary.publishedToWordPress} novos rascunhos!`);
-                  }, 1500);
-                }
-              }
-            }
-          }
-          if (summary.failed > 0) {
-            toast.error(`${summary.failed} reviews falharam`);
-          }
-
-          if (onSuccess) {
-            onSuccess(bulkResults);
-          }
-
-          return bulkResults;
+          // The job status hook will handle the rest of the process
+          return { jobId, reviewCount, estimatedTime };
         } else {
-          throw new Error(response.data.message || 'Falha na geração em massa');
+          throw new Error(response.data.message || 'Failed to queue bulk generation');
         }
       } catch (error: any) {
         console.error('Bulk generation error:', error);
@@ -359,6 +370,7 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
   };
 
   const handleClose = () => {
+    // Clean up state
     setUploadedFile(null);
     setParsedData([]);
     setResults([]);
@@ -367,9 +379,14 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
     setGenerationSummary(null);
     setPublishToWordPress(false);
     setSelectedSiteId('');
+    setCurrentJobId(null);
     setSelectedReviews(new Set());
     closeWordPressPublishModal();
     closeBulkPublishModal();
+    
+    // Stop polling
+    stopPolling();
+    
     onClose();
   };
 
@@ -954,97 +971,29 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
 
           {currentStep === 'processing' && (
             <div className="space-y-6">
-              <div className="text-center">
-                <div className="relative mb-6">
-                  <div className="w-16 h-16 gradient-primary rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                    <Loader2 className="w-8 h-8 text-white animate-spin" />
-                  </div>
-                  <div className="absolute -inset-1 bg-tatame-red/40 rounded-full blur opacity-30 animate-ping"></div>
-                </div>
+              <div className="text-center mb-6">
                 <h4 className="font-bold text-slate-900 text-xl mb-2">🤖 IA Trabalhando para Você</h4>
-                <p className="text-slate-600">Criando reviews profissionais com inteligência artificial...</p>
-                
-                {/* Enhanced Progress Section */}
-                <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl p-4 mt-6">
-                  {/* Progress Bar */}
-                  <div className="w-full bg-slate-200 rounded-full h-4 overflow-hidden shadow-inner mb-3">
-                    <div 
-                      className="gradient-primary h-4 rounded-full transition-all duration-700 shadow-medium relative overflow-hidden"
-                      style={{ 
-                        width: `${(results.filter(r => r.status !== 'processing').length / results.length) * 100}%` 
-                      }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse"></div>
-                    </div>
-                  </div>
-                  
-                  {/* Progress Stats */}
-                  <div className="flex justify-between items-center text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-700 font-medium">
-                        ✨ {results.filter(r => r.status !== 'processing').length} de {results.length} concluídos
-                      </span>
-                    </div>
-                    <div className="text-tatame-red font-semibold">
-                      {Math.round((results.filter(r => r.status !== 'processing').length / results.length) * 100)}%
-                    </div>
-                  </div>
-                  
-                  {/* Time Estimate */}
-                  <div className="mt-2 text-xs text-slate-600 text-center">
-                    ⏱️ Tempo estimado: {Math.max(1, Math.ceil((results.length - results.filter(r => r.status !== 'processing').length) * 0.5))} minutos
-                  </div>
-                </div>
-                
-                {/* Processing Tips */}
-                <div className="mt-4 text-xs text-slate-500 bg-blue-50 rounded-xl p-3">
-                  💡 <strong>Dica:</strong> Enquanto aguarda, que tal preparar mais conteúdo? A IA está criando reviews únicos e otimizados para SEO!
-                </div>
+                <p className="text-slate-600">Reviews sendo geradas em segundo plano...</p>
               </div>
 
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {results.map((result, index) => (
-                  <div key={index} className={`relative overflow-hidden rounded-2xl transition-all duration-500 ${
-                    result.status === 'processing' ? 'bg-gradient-to-r from-coral/10 to-coral/20 border border-coral/30 scale-[1.02] shadow-medium' :
-                    result.status === 'success' ? 'bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200' :
-                    'bg-gradient-to-r from-red-50 to-pink-50 border border-red-200'
-                  }`}>
-                    <div className="flex items-center justify-between p-4">
-                      <span className="text-sm font-medium text-slate-900 flex-1 truncate pr-4">
-                        {result.title}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {result.status === 'processing' && (
-                          <div className="flex items-center gap-2">
-                            <div className="w-5 h-5 bg-coral rounded-full flex items-center justify-center">
-                              <Loader2 className="w-3 h-3 text-white animate-spin" />
-                            </div>
-                            <span className="text-sm text-coral-dark font-medium">🤖 Criando...</span>
-                          </div>
-                        )}
-                        {result.status === 'success' && (
-                          <div className="flex items-center gap-2">
-                            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                              <CheckCircle className="w-3 h-3 text-white" />
-                            </div>
-                            <span className="text-sm text-green-700 font-medium">✨ Concluído!</span>
-                          </div>
-                        )}
-                        {result.status === 'error' && (
-                          <div className="flex items-center gap-2">
-                            <AlertCircle className="w-5 h-5 text-red-600" />
-                            <span className="text-sm text-red-700 font-medium">❌ Erro</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {result.status === 'processing' && (
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-coral/20">
-                        <div className="h-1 bg-coral animate-pulse"></div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+              {currentJob && (
+                <JobProgressCard 
+                  job={currentJob} 
+                  className="border-2 border-blue-200 shadow-lg"
+                />
+              )}
+
+              {!currentJob && (
+                <div className="text-center py-8">
+                  <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
+                  <p className="text-gray-600">Conectando ao sistema de fila...</p>
+                </div>
+              )}
+
+              <div className="bg-blue-50 rounded-xl p-4 text-center">
+                <p className="text-sm text-blue-700">
+                  💡 <strong>Dica:</strong> Você pode fechar esta janela. O progresso continuará em segundo plano!
+                </p>
               </div>
             </div>
           )}

@@ -10,7 +10,11 @@ import {
   deleteReview,
   getReviewStats,
   publishReview,
-  bulkPublishReviews
+  bulkPublishReviews,
+  queueBulkReviewGeneration,
+  getJobStatus,
+  getUserJobs,
+  getQueueStats
 } from '../controllers/reviewController';
 
 const router = Router();
@@ -42,5 +46,23 @@ router.delete('/:id', deleteReview);
 router.post('/:id/publish', publishReview);
 router.post('/publish-draft', publishReview); // New endpoint for bulk draft creation
 router.post('/bulk-publish', bulkPublishReviews); // New endpoint for bulk publishing
+
+// ========================= QUEUE-BASED ENDPOINTS =========================
+
+// Queue bulk review generation (NEW - replaces /bulk-generate for async processing)
+router.post('/queue-bulk-generate', 
+  (req, res, next) => {
+    const { reviews } = req.body;
+    const bulkCount = Array.isArray(reviews) ? reviews.length : 1;
+    return checkUsageLimit({ action: 'bulk_review_generation', bulkCount })(req, res, next);
+  },
+  queueBulkReviewGeneration,
+  trackUsage('bulk_reviews_generated')
+);
+
+// Job status and management
+router.get('/jobs/:jobId', getJobStatus); // Get specific job status
+router.get('/jobs', getUserJobs); // Get user's jobs
+router.get('/queue/stats', getQueueStats); // Queue statistics (admin)
 
 export default router;
