@@ -259,7 +259,7 @@ export const InstallationTerminal: React.FC<InstallationTerminalProps> = ({
         pollInterval = setInterval(async () => {
           try {
             console.log('🔍 Polling installation status for:', installationId);
-            const response = await api.get('/api/sites/installation-status/${installationId}');
+            const response = await api.get(`/api/sites/installation-status/${installationId}`);
             console.log('📊 Poll response:', response.data);
             if (response.data.success && response.data.installation) {
               const { status: installStatus, steps: installSteps, credentials: creds, error } = response.data.installation;
@@ -337,7 +337,7 @@ export const InstallationTerminal: React.FC<InstallationTerminalProps> = ({
           // Fetch actual completion data from API with retry logic
           const fetchCompletionData = async (retryCount = 0) => {
             try {
-              const response = await api.get('/api/sites/installation-status/${installationId}');
+              const response = await api.get(`/api/sites/installation-status/${installationId}`);
               console.log('📦 Got completion data from API:', response.data.installation);
               
               // If we get null credentials but have wpCredentials, use them instead
@@ -400,7 +400,7 @@ export const InstallationTerminal: React.FC<InstallationTerminalProps> = ({
     const completionTimeout = setTimeout(() => {
       if (status === 'running' && !completionTriggered) {
         console.log('⏰ Completion timeout reached, checking final status...');
-        api.get('/api/sites/installation-status/${installationId}')
+        api.get(`/api/sites/installation-status/${installationId}`)
           .then(response => {
             if (response.data.success && response.data.installation.status === 'completed') {
               console.log('🎉 Installation was completed but UI missed it - triggering completion');
