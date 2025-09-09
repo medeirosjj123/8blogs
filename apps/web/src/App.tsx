@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
-import { DebugPanel } from './components/debug/DebugPanel';
+// import { DebugPanel } from './components/debug/DebugPanel';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
@@ -165,7 +165,7 @@ function App() {
           />
           
           {/* Debug Panel - only visible in development or when debug=true */}
-          <DebugPanel />
+          {/* <DebugPanel /> */}
         </AuthProvider>
       </Router>
     </QueryClientProvider>
