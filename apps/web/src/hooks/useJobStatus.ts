@@ -82,58 +82,94 @@ export const useJobStatus = (options: UseJobStatusOptions): UseJobStatusReturn =
     queryFn: async () => {
       if (!jobId) return null;
       
+      console.log('📡 [JOB-STATUS-HOOK] Fetching job status for:', jobId);
+      
       const response = await api.get(`/api/reviews/jobs/${jobId}`);
-      return response.data.data as JobData;
+      const jobData = response.data.data as JobData;
+      
+      console.log('📊 [JOB-STATUS-HOOK] Job status update received:', {
+        jobId,
+        status: jobData?.status,
+        progress: jobData?.progress,
+        currentStep: jobData?.currentStep,
+        isCompleted: jobData?.status === 'completed',
+        rawResponse: response.data // Add full response for debugging
+      });
+      
+      return jobData;
     },
     enabled: enabled && !!jobId,
     refetchOnWindowFocus: false,
+    refetchInterval: (data) => {
+      // Stop polling if job is finished
+      if (data && (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled')) {
+        console.log('🛑 [JOB-STATUS-HOOK] Job finished, stopping polling:', data.status);
+        setIsPolling(false);
+        return false;
+      }
+      
+      // Only poll when isPolling is true
+      const shouldPoll = isPolling && enabled && !!jobId;
+      console.log('🔄 [JOB-STATUS-HOOK] Refetch interval decision:', {
+        shouldPoll,
+        isPolling,
+        enabled,
+        jobId,
+        interval: shouldPoll ? pollInterval : false
+      });
+      
+      return shouldPoll ? pollInterval : false;
+    },
     retry: (failureCount, error: any) => {
+      console.warn('❌ [JOB-STATUS-HOOK] Query error:', {
+        jobId,
+        failureCount,
+        status: error?.response?.status,
+        message: error?.message
+      });
       // Retry on network errors but not on 404s (job not found)
       if (error?.response?.status === 404) return false;
       return failureCount < 3;
     }
   });
 
-  // Handle polling with useEffect instead of refetchInterval
+  // Handle job status changes
   useEffect(() => {
-    if (!isPolling || !query.data || !jobId) return;
-    
-    const isFinished = query.data.status === 'completed' || query.data.status === 'failed' || query.data.status === 'cancelled';
-    if (isFinished) {
-      setIsPolling(false);
+    if (!query.data) {
+      console.log('🚫 [JOB-STATUS-HOOK] No query data available for status change handling');
       return;
     }
 
-    const interval = setInterval(() => {
-      query.refetch();
-    }, pollInterval);
-
-    return () => clearInterval(interval);
-  }, [isPolling, query.data?.status, jobId, pollInterval, query.refetch]);
-
-  // Handle job status changes
-  useEffect(() => {
-    if (!query.data) return;
-
     const currentStatus = query.data.status;
     
-    // Only trigger callbacks when status actually changes
+    console.log('📈 [JOB-STATUS-HOOK] Processing status update:', {
+      currentStatus,
+      previousStatus,
+      progress: query.data.progress,
+      statusChanged: previousStatus !== currentStatus
+    });
+    
+    // Only trigger status-specific callbacks when status actually changes
     if (previousStatus !== currentStatus) {
       setPreviousStatus(currentStatus);
       
       if (currentStatus === 'completed') {
+        console.log('✅ [JOB-STATUS-HOOK] Job completed, calling onComplete callback');
         setIsPolling(false);
         onComplete?.(query.data);
       } else if (currentStatus === 'failed' || currentStatus === 'cancelled') {
+        console.log('❌ [JOB-STATUS-HOOK] Job failed/cancelled, calling onError callback');
         setIsPolling(false);
         onError?.(query.data.error || new Error(`Job ${currentStatus}`));
       } else if (currentStatus === 'processing') {
+        console.log('🔄 [JOB-STATUS-HOOK] Job processing, calling onProgress callback');
         onProgress?.(query.data);
       }
     }
 
-    // Also call onProgress when progress changes (even within same status)
-    if (currentStatus === 'processing') {
+    // Always call onProgress for processing jobs (even within same status) to update progress
+    if (currentStatus === 'processing' || currentStatus === 'queued') {
+      console.log('📊 [JOB-STATUS-HOOK] Calling onProgress for current job state');
       onProgress?.(query.data);
     }
   }, [query.data, previousStatus, onComplete, onProgress, onError]);
@@ -147,10 +183,23 @@ export const useJobStatus = (options: UseJobStatusOptions): UseJobStatusReturn =
   }, [query.error, onError]);
 
   const startPolling = useCallback(() => {
-    if (jobId && query.data && !['completed', 'failed', 'cancelled'].includes(query.data.status)) {
+    console.log('🚀 [JOB-STATUS-HOOK] Starting polling for job:', {
+      jobId,
+      currentStatus: query.data?.status,
+      hasJobId: !!jobId,
+      enabled,
+      currentlyPolling: isPolling
+    });
+    
+    if (jobId) {
       setIsPolling(true);
+      // Also trigger an immediate refetch when starting polling
+      console.log('🔄 [JOB-STATUS-HOOK] Triggering immediate refetch on polling start');
+      query.refetch();
+    } else {
+      console.warn('⚠️ [JOB-STATUS-HOOK] Cannot start polling - no job ID provided');
     }
-  }, [jobId, query.data]);
+  }, [jobId, query.data, query.refetch, enabled, isPolling]);
 
   const stopPolling = useCallback(() => {
     setIsPolling(false);

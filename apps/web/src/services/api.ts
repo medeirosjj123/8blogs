@@ -117,13 +117,19 @@ api.interceptors.response.use(
       }
     }
 
-    // Handle other errors
-    if (error.response?.status === 500) {
-      toast.error('Erro no servidor. Tente novamente mais tarde.');
-    } else if (error.response?.status === 404) {
-      toast.error('Recurso não encontrado.');
-    } else if (error.response?.status === 403) {
-      toast.error('Você não tem permissão para acessar este recurso.');
+    // Handle other errors - but skip showing toasts for bulk generation endpoints
+    // since they have their own error handling
+    const skipGlobalToast = originalRequest?.url?.includes('/reviews/queue-bulk-generate') || 
+                           originalRequest?.url?.includes('/reviews/jobs/');
+    
+    if (!skipGlobalToast) {
+      if (error.response?.status === 500) {
+        toast.error('Erro no servidor. Tente novamente mais tarde.');
+      } else if (error.response?.status === 404) {
+        toast.error('Recurso não encontrado.');
+      } else if (error.response?.status === 403) {
+        toast.error('Você não tem permissão para acessar este recurso.');
+      }
     }
 
     return Promise.reject(error);

@@ -4,7 +4,10 @@ import {
   getCourse,
   getModule,
   getLesson,
-  getCourseModules
+  getCourseModules,
+  createCourse,
+  updateCourse,
+  deleteCourse
 } from '../controllers/courseController';
 import { authenticate } from '../middlewares/authMiddleware';
 
@@ -14,7 +17,10 @@ const router = Router();
 router.get('/', getCourses);
 
 // Protected routes (auth required)
+router.post('/', authenticate, createCourse);
 router.get('/:courseId', authenticate, getCourse);
+router.put('/:courseId', authenticate, updateCourse);
+router.delete('/:courseId', authenticate, deleteCourse);
 router.get('/:courseId/modules', authenticate, getCourseModules);
 
 // Module routes

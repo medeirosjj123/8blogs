@@ -43,6 +43,7 @@ import aiModelRoutes from './routes/aiModel.routes';
 import wordpressThemeRoutes from './routes/wordpressThemeRoutes';
 import wordpressPluginRoutes from './routes/wordpressPluginRoutes';
 import wordpressSiteRoutes from './routes/wordpressSiteRoutes';
+import debugRoutes from './routes/debugRoutes';
 import callRoutes from './routes/call.routes';
 import { initializeSocketIO } from './socket';
 import { siteInstallationWorker } from './queues/siteInstallationQueue';
@@ -1046,6 +1047,7 @@ app.use('/api/admin/settings', settingsRoutes); // Settings routes
 app.use('/api/admin/email-templates', emailTemplateRoutes); // Email template routes
 app.use('/api/admin/templates', adminTemplateRoutes); // WordPress template routes
 app.use('/api/calls', callRoutes); // Weekly calls management routes
+app.use('/api/debug', debugRoutes); // Debug and troubleshooting endpoints
 
 // Static files for uploads (in production, use CDN)
 app.use('/uploads', express.static('uploads'));

@@ -63,7 +63,7 @@ export interface IReviewGenerationJobDocument extends Document {
   };
   
   // BullMQ job reference
-  bullJobId: string;
+  bullJobId?: string;
   
   // Timestamps
   queuedAt: Date;
@@ -214,9 +214,8 @@ const reviewGenerationJobSchema = new Schema<IReviewGenerationJobDocument>({
   
   bullJobId: {
     type: String,
-    required: true,
-    unique: true,
-    index: true
+    required: false, // Allow creation without bullJobId initially
+    index: true // Index for performance but no unique constraint
   },
   
   queuedAt: {
@@ -291,11 +290,22 @@ reviewGenerationJobSchema.methods.markAsStarted = async function(): Promise<void
 };
 
 reviewGenerationJobSchema.methods.markAsCompleted = async function(): Promise<void> {
-  this.status = 'completed';
-  this.completedAt = new Date();
-  this.progress.current = this.progress.total;
-  this.progress.percentage = 100;
-  await this.save();
+  try {
+    this.status = 'completed';
+    this.completedAt = new Date();
+    this.progress.current = this.progress.total;
+    this.progress.percentage = 100;
+    await this.save();
+    console.log(`✅ Job ${this._id} marked as completed successfully`);
+  } catch (error: any) {
+    console.error(`❌ Failed to mark job ${this._id} as completed:`, {
+      error: error.message,
+      code: error.code,
+      jobId: this._id,
+      bullJobId: this.bullJobId
+    });
+    throw error;
+  }
 };
 
 reviewGenerationJobSchema.methods.markAsFailed = async function(error: any): Promise<void> {

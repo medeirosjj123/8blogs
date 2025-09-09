@@ -26,6 +26,7 @@ import {
 } from '../controllers/executeInstallation';
 import { authenticate } from '../middlewares/authMiddleware';
 import { checkUsageLimit, trackUsage } from '../middlewares/usageLimitsMiddleware';
+import { debugMiddleware } from '../middlewares/debugMiddleware';
 
 const router = Router();
 
@@ -85,6 +86,9 @@ router.get('/temp-admin-check/:email', async (req: any, res) => {
 
 // All site routes require authentication (except temp ones above)
 router.use(authenticate);
+
+// Apply debug middleware for site-related operations
+router.use(debugMiddleware);
 
 // Template routes
 router.get('/templates', getTemplates);

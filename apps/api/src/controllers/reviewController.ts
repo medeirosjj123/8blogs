@@ -1277,12 +1277,52 @@ export const getJobStatus = async (req: AuthRequest, res: Response) => {
 
     // Verify job belongs to user
     const job = await ReviewGenerationJob.findById(jobId);
-    if (!job || job.userId.toString() !== userId) {
+    
+    // Debug logging for user ownership verification
+    console.log('🔍 [JOB-ACCESS-DEBUG]', {
+      jobId,
+      jobFound: !!job,
+      jobUserId: job?.userId?.toString(),
+      requestUserId: userId,
+      userMatch: job?.userId?.toString() === userId
+    });
+    
+    // Allow access if: job belongs to user OR user is admin
+    const isAdmin = req.user?.role === 'admin';
+    const hasAccess = job && (job.userId.toString() === userId || isAdmin);
+    
+    if (!hasAccess) {
+      console.warn('❌ [JOB-ACCESS-DENIED]', {
+        jobId,
+        jobUserId: job?.userId?.toString(),
+        requestUserId: userId,
+        isAdmin,
+        reason: !job ? 'Job not found' : 'User ID mismatch and not admin'
+      });
+      
       return res.status(403).json({
         success: false,
         message: 'Access denied'
       });
     }
+    
+    console.log('✅ [JOB-ACCESS-GRANTED]', {
+      jobId,
+      jobUserId: job.userId.toString(),
+      requestUserId: userId,
+      isAdmin,
+      accessReason: job.userId.toString() === userId ? 'owner' : 'admin'
+    });
+
+    // Log the actual job data being returned
+    console.log('📊 [JOB-STATUS-RESPONSE]', {
+      jobId,
+      jobStatus: result.job?.status,
+      jobProgress: result.job?.progress,
+      jobCurrentStep: result.job?.currentStep,
+      jobResultsCount: result.job?.results?.completed?.length || 0,
+      fullJobData: JSON.stringify(result.job, null, 2)
+    });
 
     res.json({
       success: true,

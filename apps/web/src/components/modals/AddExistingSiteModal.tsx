@@ -4,6 +4,7 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { UpgradePrompt } from '../UpgradePrompt';
 import { useUsage } from '../../hooks/useUsage';
+import { debugLogger } from '../../utils/debugLogger';
 
 interface AddExistingSiteModalProps {
   isOpen: boolean;
@@ -62,11 +63,49 @@ export const AddExistingSiteModal: React.FC<AddExistingSiteModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
+    debugLogger.info('EXISTING_SITE_MODAL', 'Starting WordPress site addition process', { 
+      modal: 'AddExistingSiteModal',
+      formData: {
+        name: formData.name.trim(),
+        url: formData.url.trim(),
+        username: formData.username.trim(),
+        hasPassword: !!formData.applicationPassword,
+        isDefault: false
+      }
+    });
+
+    if (!validateForm()) {
+      debugLogger.warning('EXISTING_SITE_MODAL', 'Form validation failed', {
+        errors,
+        formData: {
+          hasName: !!formData.name.trim(),
+          hasUrl: !!formData.url.trim(),
+          hasUsername: !!formData.username.trim(),
+          hasPassword: !!formData.applicationPassword.trim()
+        }
+      });
+      return;
+    }
+
+    debugLogger.info('EXISTING_SITE_MODAL', 'Form validation passed, making API call', {
+      endpoint: '/api/wordpress/sites',
+      method: 'POST'
+    });
     
     setIsLoading(true);
+    const startTime = Date.now();
+    let requestId: string | undefined;
     
     try {
+      // Log the API call with sanitized data
+      requestId = debugLogger.logApiCall('/api/wordpress/sites', 'POST', {
+        name: formData.name.trim(),
+        url: formData.url.trim(),
+        username: formData.username.trim(),
+        applicationPassword: '[REDACTED]', // Don't log sensitive data
+        isDefault: false
+      });
+
       const response = await api.post('/api/wordpress/sites', {
         name: formData.name.trim(),
         url: formData.url.trim(),
@@ -74,21 +113,64 @@ export const AddExistingSiteModal: React.FC<AddExistingSiteModalProps> = ({
         applicationPassword: formData.applicationPassword.trim(),
         isDefault: false
       });
+
+      const duration = Date.now() - startTime;
+      debugLogger.logApiResponse(requestId, response.data, response.status, duration);
+
+      debugLogger.info('EXISTING_SITE_MODAL', 'API response received', { 
+        success: response.data.success,
+        hasMessage: !!response.data.message,
+        hasData: !!response.data.data,
+        responseKeys: Object.keys(response.data),
+        duration
+      }, requestId);
       
       if (response.data.success) {
+        debugLogger.success('EXISTING_SITE_MODAL', 'WordPress site added successfully', {
+          url: formData.url.trim(),
+          name: formData.name.trim(),
+          siteId: response.data.data?._id
+        }, requestId);
+
         toast.success('Site WordPress adicionado com sucesso!');
         setFormData({ name: '', url: '', username: '', applicationPassword: '' });
         setErrors({});
         onSiteAdded?.();
         onClose();
       } else {
+        debugLogger.warning('EXISTING_SITE_MODAL', 'API returned success=false', { 
+          message: response.data.message,
+          responseData: response.data
+        }, requestId);
+
         throw new Error(response.data.message || 'Erro ao adicionar site');
       }
     } catch (error: any) {
+      const duration = Date.now() - startTime;
+      
+      if (requestId) {
+        debugLogger.logApiError(requestId, error, duration);
+      }
+
+      debugLogger.error('EXISTING_SITE_MODAL', 'Error adding WordPress site', {
+        error: {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data
+        },
+        url: formData.url.trim(),
+        duration
+      }, requestId);
+
       console.error('Error adding WordPress site:', error);
       
       // Handle blog limit error (429 status)
       if (error.response?.status === 429 && error.response?.data?.limitInfo) {
+        debugLogger.warning('EXISTING_SITE_MODAL', 'Blog limit exceeded', {
+          limitInfo: error.response.data.limitInfo
+        }, requestId);
+
         showUpgradePromptFor('blogs');
         setIsLoading(false);
         return;
@@ -99,6 +181,9 @@ export const AddExistingSiteModal: React.FC<AddExistingSiteModalProps> = ({
       setErrors({ general: errorMessage });
     } finally {
       setIsLoading(false);
+      debugLogger.info('EXISTING_SITE_MODAL', 'WordPress site addition process completed', {
+        isLoading: false
+      }, requestId);
     }
   };
 

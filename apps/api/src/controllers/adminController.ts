@@ -427,20 +427,56 @@ export const createCourse = async (req: AuthRequest, res: Response) => {
     console.log('Creating course with data:', req.body);
     console.log('Thumbnail received:', req.body.thumbnail);
     
+    // Generate slug from title
+    const slug = req.body.title
+      ?.toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .trim();
+
+    if (!slug) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Title is required to generate slug' 
+      });
+    }
+
     const courseData = {
       ...req.body,
-      createdBy: req.user._id
+      slug,
+      instructor: (req.user as any)._id.toString(), // Course model expects instructor, not createdBy
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
 
     const course = new Course(courseData);
     await course.save();
 
-    console.log(`Admin ${req.user.email} created course: ${course.title} with thumbnail: ${course.thumbnail}`);
+    console.log(`Admin ${(req.user as any).email} created course: ${course.title} with thumbnail: ${course.thumbnail}`);
 
     res.status(201).json({ success: true, data: course });
   } catch (error) {
     console.error('Error creating course:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
+    
+    // Send more detailed error information
+    if (error instanceof mongoose.Error.ValidationError) {
+      const validationErrors = Object.keys(error.errors).map(key => ({
+        field: key,
+        message: error.errors[key].message
+      }));
+      
+      res.status(400).json({ 
+        success: false, 
+        message: 'Validation error',
+        errors: validationErrors
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
   }
 };
 

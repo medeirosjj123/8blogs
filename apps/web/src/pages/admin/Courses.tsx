@@ -167,6 +167,17 @@ export default function AdminCourses() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate required fields
+    if (!courseForm.title.trim()) {
+      toast.error('Título é obrigatório');
+      return;
+    }
+    
+    if (!courseForm.description.trim()) {
+      toast.error('Descrição é obrigatória');
+      return;
+    }
+    
     try {
       let thumbnail = courseForm.thumbnail;
       
@@ -186,9 +197,17 @@ export default function AdminCourses() {
         setIsUploading(false);
       }
       
+      // Map Portuguese level to English for API
+      const levelMapping = {
+        'iniciante': 'beginner',
+        'intermediário': 'intermediate', 
+        'avançado': 'advanced'
+      };
+
       const courseData = {
         ...courseForm,
         thumbnail,
+        level: levelMapping[courseForm.level as keyof typeof levelMapping] || courseForm.level,
         tags: courseForm.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
         price: Number(courseForm.price)
       };
@@ -396,7 +415,7 @@ export default function AdminCourses() {
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Descrição Completa
+                    Descrição Completa <span className="text-red-400">*</span>
                   </label>
                   <textarea
                     value={courseForm.description}
@@ -404,6 +423,7 @@ export default function AdminCourses() {
                     rows={4}
                     className="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-coral"
                     placeholder="Descrição detalhada do curso"
+                    required
                   />
                 </div>
 

@@ -180,10 +180,33 @@ class ReviewQueueService {
     }, 'Processing review generation job');
 
     try {
-      // Get the job from database
-      const dbJob = await ReviewGenerationJob.findOne({ bullJobId: job.id });
+      // Add type logging to understand the issue
+      logger.info({ 
+        bullJobId: job.id,
+        bullJobIdType: typeof job.id,
+        bullJobIdString: job.id?.toString()
+      }, 'Searching for job in database');
+
+      // Get the job from database with retry logic - FIX: Convert job.id to string for consistency
+      let dbJob = await ReviewGenerationJob.findOne({ bullJobId: job.id?.toString() });
+      
+      // If not found, try a few more times with delays (database might still be committing)
+      let attempts = 0;
+      while (!dbJob && attempts < 3) {
+        logger.warn({ 
+          bullJobId: job.id, 
+          bullJobIdString: job.id?.toString(),
+          jobId, 
+          attempt: attempts + 1 
+        }, 'Job not found in database, retrying...');
+        
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempts + 1)));
+        dbJob = await ReviewGenerationJob.findOne({ bullJobId: job.id?.toString() });
+        attempts++;
+      }
+      
       if (!dbJob) {
-        throw new Error('Job not found in database');
+        throw new Error('Job not found in database after multiple attempts');
       }
 
       await dbJob.markAsStarted();
@@ -339,7 +362,7 @@ class ReviewQueueService {
 
       // Update database
       try {
-        const dbJob = await ReviewGenerationJob.findOne({ bullJobId: job.id });
+        const dbJob = await ReviewGenerationJob.findOne({ bullJobId: job.id?.toString() });
         if (dbJob) {
           await dbJob.markAsFailed(error);
         }
@@ -399,11 +422,19 @@ class ReviewQueueService {
             totalGenerationTime: 0
           }
         },
-        bullJobId: '', // Will be updated after BullMQ job is created
         queuedAt: new Date()
       });
 
-      // Create BullMQ job
+      // Generate a unique job ID for BullMQ that we can use consistently
+      const bullJobId = `bulk-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Set the bullJobId before saving to avoid race condition
+      reviewJob.bullJobId = bullJobId;
+      
+      // Save database record first
+      await reviewJob.save();
+      
+      // Create BullMQ job with the same ID - no delay needed since DB record already exists
       const bullJob = await this.queue.add('bulk-review-generation', {
         jobId: reviewJob._id.toString(),
         userId: data.userId,
@@ -413,11 +444,21 @@ class ReviewQueueService {
           selectedSiteId: data.selectedSiteId,
           reviewsData: data.reviewsData
         }
+      }, {
+        jobId: bullJobId, // Use our pre-generated ID
+        delay: 0 // No delay needed since DB record exists
       });
 
-      // Update database job with BullMQ job ID
-      reviewJob.bullJobId = bullJob.id!.toString();
-      await reviewJob.save();
+      // Verify the BullMQ job ID matches what we expected
+      if (bullJob.id!.toString() !== bullJobId) {
+        logger.warn({
+          expectedId: bullJobId,
+          actualId: bullJob.id!.toString(),
+          jobId: reviewJob._id
+        }, 'BullMQ job ID mismatch - this should not happen');
+      }
+
+      // Database record is already saved with the correct bullJobId
 
       logger.info({
         jobId: reviewJob._id,
@@ -534,34 +575,57 @@ class ReviewQueueService {
   // Get job status
   async getJobStatus(jobId: string) {
     try {
+      console.log('🔍 [GET-JOB-STATUS] Looking for job:', { jobId, jobIdType: typeof jobId });
+      
       const job = await ReviewGenerationJob.findById(jobId);
+      
+      console.log('🔍 [GET-JOB-STATUS] Database result:', { 
+        jobFound: !!job,
+        jobId: job?._id?.toString(),
+        bullJobId: job?.bullJobId,
+        status: job?.status 
+      });
+      
       if (!job) {
+        console.warn('❌ [GET-JOB-STATUS] Job not found in database:', { jobId });
         return { success: false, error: 'Job not found' };
       }
 
       // Also get BullMQ job status
       const bullJob = await this.queue.getJob(job.bullJobId);
       
+      const jobResponse = {
+        id: job._id,
+        status: job.status,
+        progress: job.progress,
+        currentStep: job.currentStep,
+        results: job.results,
+        error: job.error,
+        queuedAt: job.queuedAt,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        bullJob: bullJob ? {
+          id: bullJob.id,
+          progress: bullJob.progress,
+          processedOn: bullJob.processedOn,
+          finishedOn: bullJob.finishedOn,
+          failedReason: bullJob.failedReason
+        } : null
+      };
+
+      console.log('📤 [GET-JOB-STATUS] Returning job data:', {
+        jobId,
+        status: jobResponse.status,
+        progress: jobResponse.progress,
+        currentStep: jobResponse.currentStep,
+        resultsCompletedCount: jobResponse.results?.completed?.length || 0,
+        bullJobFound: !!bullJob,
+        fullResponse: JSON.stringify(jobResponse, null, 2)
+      });
+      
       return {
         success: true,
-        job: {
-          id: job._id,
-          status: job.status,
-          progress: job.progress,
-          currentStep: job.currentStep,
-          results: job.results,
-          error: job.error,
-          queuedAt: job.queuedAt,
-          startedAt: job.startedAt,
-          completedAt: job.completedAt,
-          bullJob: bullJob ? {
-            id: bullJob.id,
-            progress: bullJob.progress,
-            processedOn: bullJob.processedOn,
-            finishedOn: bullJob.finishedOn,
-            failedReason: bullJob.failedReason
-          } : null
-        }
+        job: jobResponse
       };
     } catch (error: any) {
       logger.error({ error, jobId }, 'Failed to get job status');

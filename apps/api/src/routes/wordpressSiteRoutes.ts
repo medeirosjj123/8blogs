@@ -1,6 +1,7 @@
 import express from 'express';
 import { 
   getUserWordPressSites,
+  createWordPressSite,
   refreshSiteStatus,
   toggleSiteStatus,
   createSiteBackup,
@@ -9,11 +10,18 @@ import {
   updateWordPress
 } from '../controllers/wordpressSiteController';
 import { authenticate } from '../middlewares/authMiddleware';
+import { debugMiddleware } from '../middlewares/debugMiddleware';
 
 const router = express.Router();
 
+// Apply debug middleware to all routes
+router.use(debugMiddleware);
+
 // Get user's WordPress sites
 router.get('/', authenticate, getUserWordPressSites);
+
+// Create new WordPress site
+router.post('/', authenticate, createWordPressSite);
 
 // Refresh site status
 router.post('/:siteId/refresh-status', authenticate, refreshSiteStatus);

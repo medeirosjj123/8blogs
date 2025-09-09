@@ -47,22 +47,23 @@ interface JobProgressCardProps {
     completedAt?: string;
   };
   className?: string;
+  hideCompletionDetails?: boolean;
 }
 
-export const JobProgressCard: React.FC<JobProgressCardProps> = ({ job, className = '' }) => {
+export const JobProgressCard: React.FC<JobProgressCardProps> = ({ job, className = '', hideCompletionDetails = false }) => {
   const getStatusIcon = () => {
     switch (job.status) {
       case 'queued':
-        return <Clock className="w-5 h-5 text-yellow-500" />;
+        return <Clock className="w-5 h-5 text-bloghouse-accent-500" />;
       case 'processing':
-        return <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />;
+        return <Loader2 className="w-5 h-5 text-bloghouse-primary-500 animate-spin" />;
       case 'completed':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+        return <CheckCircle className="w-5 h-5 text-bloghouse-secondary-500" />;
       case 'failed':
       case 'cancelled':
         return <XCircle className="w-5 h-5 text-red-500" />;
       default:
-        return <AlertCircle className="w-5 h-5 text-gray-500" />;
+        return <AlertCircle className="w-5 h-5 text-bloghouse-gray-500" />;
     }
   };
 
@@ -86,16 +87,16 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ job, className
   const getStatusColor = () => {
     switch (job.status) {
       case 'queued':
-        return 'bg-yellow-50 border-yellow-200';
+        return 'bg-bloghouse-accent-50 border-bloghouse-accent-200';
       case 'processing':
-        return 'bg-blue-50 border-blue-200';
+        return 'bg-bloghouse-primary-50 border-bloghouse-primary-200 bloghouse-glow';
       case 'completed':
-        return 'bg-green-50 border-green-200';
+        return 'bg-bloghouse-secondary-50 border-bloghouse-secondary-200';
       case 'failed':
       case 'cancelled':
         return 'bg-red-50 border-red-200';
       default:
-        return 'bg-gray-50 border-gray-200';
+        return 'bg-bloghouse-gray-50 border-bloghouse-gray-200';
     }
   };
 
@@ -123,22 +124,24 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ job, className
   };
 
   return (
-    <div className={`bg-white border ${getStatusColor()} rounded-xl p-6 shadow-sm ${className}`}>
+    <div className={`bg-white border ${getStatusColor()} rounded-2xl p-8 shadow-medium transition-all duration-300 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          {getStatusIcon()}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-4">
+          <div className="p-2 rounded-2xl bg-gradient-to-br from-white to-transparent backdrop-blur-sm border border-white/20">
+            {getStatusIcon()}
+          </div>
           <div>
-            <h3 className="font-semibold text-gray-900">{getStatusText()}</h3>
-            <p className="text-sm text-gray-500">
+            <h3 className="font-semibold text-bloghouse-gray-900 text-lg">{getStatusText()}</h3>
+            <p className="text-sm text-bloghouse-gray-600 font-medium">
               {job.progress.total} review{job.progress.total !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
-        <div className="text-right text-sm text-gray-500">
-          <div>Iniciado: {formatTime(job.queuedAt)}</div>
+        <div className="text-right text-sm text-bloghouse-gray-600">
+          <div className="font-medium">Iniciado: {formatTime(job.queuedAt)}</div>
           {job.startedAt && (
-            <div>
+            <div className="text-bloghouse-primary-500 font-semibold">
               Duração: {formatDuration(job.startedAt, job.completedAt)}
             </div>
           )}
@@ -147,26 +150,31 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ job, className
 
       {/* Progress Bar */}
       {job.status === 'processing' || job.status === 'completed' ? (
-        <div className="mb-4">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-medium text-gray-700">
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-sm font-semibold text-bloghouse-gray-700">
               {job.progress.current} de {job.progress.total} reviews
             </span>
-            <span className="text-sm font-medium text-gray-900">
+            <div className="px-3 py-1 rounded-2xl bg-gradient-primary text-white text-sm font-bold shadow-glow">
               {Math.round(job.progress.percentage)}%
-            </span>
+            </div>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="relative w-full bg-bloghouse-gray-200 rounded-full h-3 overflow-hidden">
             <div
-              className={`h-2 rounded-full transition-all duration-300 ${
-                job.status === 'completed' ? 'bg-green-500' : 'bg-blue-500'
+              className={`h-full rounded-full transition-all duration-500 ease-out ${
+                job.status === 'completed' 
+                  ? 'gradient-secondary shadow-glow' 
+                  : 'gradient-primary bloghouse-glow'
               }`}
               style={{ width: `${job.progress.percentage}%` }}
             />
+            {job.status === 'processing' && (
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+            )}
           </div>
           {job.currentStep && (
-            <p className="text-sm text-gray-600 mt-2 flex items-center">
-              <Sparkles className="w-4 h-4 mr-1 text-blue-500" />
+            <p className="text-sm text-bloghouse-primary-600 mt-3 flex items-center font-medium">
+              <Sparkles className="w-4 h-4 mr-2 text-bloghouse-primary-500 animate-pulse" />
               {job.currentStep}
             </p>
           )}
@@ -174,55 +182,57 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ job, className
       ) : null}
 
       {/* Results Summary */}
-      {job.status === 'completed' && job.results.stats.totalReviews > 0 && (
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="bg-green-50 rounded-lg p-3">
-            <div className="text-lg font-bold text-green-700">
+      {job.status === 'completed' && job.results.stats.totalReviews > 0 && !hideCompletionDetails && (
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-gradient-secondary rounded-2xl p-4 shadow-soft border border-bloghouse-secondary-100">
+            <div className="text-2xl font-bold text-white mb-1">
               {job.results.stats.successfulReviews}
             </div>
-            <div className="text-sm text-green-600">Sucessos</div>
+            <div className="text-sm text-white/80 font-medium">Sucessos</div>
           </div>
           {job.results.stats.failedReviews > 0 && (
-            <div className="bg-red-50 rounded-lg p-3">
-              <div className="text-lg font-bold text-red-700">
+            <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-4 shadow-soft border border-red-200">
+              <div className="text-2xl font-bold text-white mb-1">
                 {job.results.stats.failedReviews}
               </div>
-              <div className="text-sm text-red-600">Falhas</div>
+              <div className="text-sm text-white/80 font-medium">Falhas</div>
             </div>
           )}
         </div>
       )}
 
       {/* Completed Reviews List */}
-      {job.results.completed.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="font-medium text-gray-900 text-sm mb-2">
+      {job.results.completed.length > 0 && !hideCompletionDetails && (
+        <div className="space-y-3">
+          <h4 className="font-semibold text-bloghouse-gray-900 text-sm mb-3">
             Reviews Geradas ({job.results.completed.length})
           </h4>
-          <div className="max-h-40 overflow-y-auto space-y-1">
+          <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
             {job.results.completed.map((result, index) => (
               <div
                 key={index}
-                className={`flex items-center justify-between p-2 rounded-lg text-sm ${
+                className={`flex items-center justify-between p-3 rounded-2xl text-sm transition-all duration-200 hover:scale-[1.02] ${
                   result.status === 'success'
-                    ? 'bg-green-50 text-green-800'
-                    : 'bg-red-50 text-red-800'
+                    ? 'bg-gradient-to-r from-bloghouse-secondary-50 to-bloghouse-secondary-100 text-bloghouse-secondary-800 border border-bloghouse-secondary-200'
+                    : 'bg-gradient-to-r from-red-50 to-red-100 text-red-800 border border-red-200'
                 }`}
               >
-                <div className="flex items-center space-x-2">
-                  {result.status === 'success' ? (
-                    <CheckCircle className="w-4 h-4" />
-                  ) : (
-                    <XCircle className="w-4 h-4" />
-                  )}
-                  <span className="truncate max-w-xs">{result.title}</span>
+                <div className="flex items-center space-x-3">
+                  <div className="p-1 rounded-full bg-white/50">
+                    {result.status === 'success' ? (
+                      <CheckCircle className="w-4 h-4 text-bloghouse-secondary-600" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-600" />
+                    )}
+                  </div>
+                  <span className="truncate max-w-xs font-medium">{result.title}</span>
                 </div>
                 {result.status === 'success' && result.wordpressUrl && (
                   <a
                     href={result.wordpressUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center text-blue-600 hover:text-blue-800"
+                    className="flex items-center text-bloghouse-primary-600 hover:text-bloghouse-primary-700 p-1 rounded-xl hover:bg-white/50 transition-all"
                   >
                     <ExternalLink className="w-4 h-4" />
                   </a>
@@ -235,33 +245,33 @@ export const JobProgressCard: React.FC<JobProgressCardProps> = ({ job, className
 
       {/* Error Message */}
       {job.status === 'failed' && job.error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-sm text-red-800 font-medium">Erro:</p>
-          <p className="text-sm text-red-700">{job.error.message}</p>
+        <div className="bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-2xl p-4 shadow-soft">
+          <p className="text-sm text-red-800 font-semibold mb-1">Erro:</p>
+          <p className="text-sm text-red-700 font-medium">{job.error.message}</p>
         </div>
       )}
 
       {/* Stats for completed jobs */}
-      {job.status === 'completed' && job.results.stats.totalCost > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-sm font-medium text-gray-900">
+      {job.status === 'completed' && job.results.stats.totalCost > 0 && !hideCompletionDetails && (
+        <div className="mt-6 pt-6 border-t border-bloghouse-gray-200">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center p-3 bg-gradient-to-br from-bloghouse-primary-50 to-bloghouse-primary-100 rounded-2xl border border-bloghouse-primary-200">
+              <div className="text-lg font-bold text-bloghouse-primary-700">
                 {job.results.stats.totalTokensUsed.toLocaleString()}
               </div>
-              <div className="text-xs text-gray-500">Tokens</div>
+              <div className="text-xs text-bloghouse-primary-600 font-medium">Tokens</div>
             </div>
-            <div>
-              <div className="text-sm font-medium text-gray-900">
+            <div className="text-center p-3 bg-gradient-to-br from-bloghouse-secondary-50 to-bloghouse-secondary-100 rounded-2xl border border-bloghouse-secondary-200">
+              <div className="text-lg font-bold text-bloghouse-secondary-700">
                 ${job.results.stats.totalCost.toFixed(4)}
               </div>
-              <div className="text-xs text-gray-500">Custo</div>
+              <div className="text-xs text-bloghouse-secondary-600 font-medium">Custo</div>
             </div>
-            <div>
-              <div className="text-sm font-medium text-gray-900">
+            <div className="text-center p-3 bg-gradient-to-br from-bloghouse-accent-50 to-bloghouse-accent-100 rounded-2xl border border-bloghouse-accent-200">
+              <div className="text-lg font-bold text-bloghouse-accent-700">
                 {Math.round(job.results.stats.totalGenerationTime / 1000)}s
               </div>
-              <div className="text-xs text-gray-500">Tempo</div>
+              <div className="text-xs text-bloghouse-accent-600 font-medium">Tempo</div>
             </div>
           </div>
         </div>

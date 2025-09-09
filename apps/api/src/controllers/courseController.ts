@@ -366,3 +366,142 @@ export async function getCourseModules(req: AuthRequest, res: Response): Promise
     });
   }
 }
+
+// Create new course
+export async function createCourse(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+      return;
+    }
+
+    const courseData = req.body;
+    
+    // Generate slug from title
+    const slug = courseData.title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .trim();
+
+    const newCourse = new Course({
+      ...courseData,
+      slug,
+      instructor: userId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    const savedCourse = await newCourse.save();
+    
+    logger.info('Course created:', savedCourse._id);
+    
+    res.status(201).json({
+      success: true,
+      data: savedCourse,
+      message: 'Curso criado com sucesso'
+    });
+  } catch (error) {
+    logger.error('Error creating course:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor'
+    });
+  }
+}
+
+// Update course
+export async function updateCourse(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+      return;
+    }
+
+    const { courseId } = req.params;
+    const courseData = req.body;
+
+    // Update slug if title changed
+    if (courseData.title) {
+      courseData.slug = courseData.title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .trim();
+    }
+
+    const updatedCourse = await Course.findByIdAndUpdate(
+      courseId,
+      { 
+        ...courseData, 
+        updatedAt: new Date() 
+      },
+      { new: true }
+    );
+
+    if (!updatedCourse) {
+      res.status(404).json({
+        success: false,
+        message: 'Curso não encontrado'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: updatedCourse,
+      message: 'Curso atualizado com sucesso'
+    });
+  } catch (error) {
+    logger.error('Error updating course:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor'
+    });
+  }
+}
+
+// Delete course
+export async function deleteCourse(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+      return;
+    }
+
+    const { courseId } = req.params;
+    
+    const deletedCourse = await Course.findByIdAndDelete(courseId);
+
+    if (!deletedCourse) {
+      res.status(404).json({
+        success: false,
+        message: 'Curso não encontrado'
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Curso deletado com sucesso'
+    });
+  } catch (error) {
+    logger.error('Error deleting course:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor'
+    });
+  }
+}

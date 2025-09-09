@@ -258,7 +258,16 @@ if (redisConnection) {
         // Suppress Redis connection errors as we already warned about it
         return;
       }
-      logger.error({ error: err }, 'Worker error');
+      
+      // Better error logging with more details
+      logger.error({ 
+        error: {
+          message: err?.message || 'Unknown error',
+          name: err?.name || 'Unknown',
+          stack: err?.stack || 'No stack trace',
+          code: err?.code || 'No error code'
+        }
+      }, 'Site installation worker error');
     });
   } catch (error) {
     logger.warn('Failed to create worker. BullMQ worker features disabled.');

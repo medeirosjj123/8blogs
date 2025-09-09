@@ -1629,32 +1629,42 @@ export async function addExistingSite(req: AuthRequest, res: Response): Promise<
       normalizedUrl
     });
     
-    const existingSite = await Installation.findOne({
-      userId: userId, // Only check for this user's installations
-      'installationOptions.isExisting': true, // Only check existing WordPress connections
-      status: 'completed', // Only check completed connections
+    // More robust duplicate check - also check for any Installation with this domain/URL regardless of status
+    const duplicateCheck = await Installation.find({
+      userId: userId,
       $or: [
         { domain: hostname },
         { 'siteInfo.accessUrl': normalizedUrl }
       ]
-    });
+    }).select('_id domain status templateId installationOptions.isExisting siteInfo.accessUrl createdAt');
     
-    logger.info('Database query result', {
-      existingSite: existingSite ? {
-        id: existingSite._id,
-        domain: existingSite.domain,
-        userId: existingSite.userId
-      } : null
+    logger.info('Comprehensive duplicate check result', {
+      hostname,
+      normalizedUrl,
+      foundInstallations: duplicateCheck.map(inst => ({
+        id: inst._id,
+        domain: inst.domain,
+        status: inst.status,
+        templateId: inst.templateId,
+        accessUrl: inst.siteInfo?.accessUrl,
+        isExisting: inst.installationOptions?.isExisting,
+        createdAt: inst.createdAt
+      }))
     });
+
+    // Check if any completed existing site already exists
+    const existingCompletedSite = duplicateCheck.find(site => 
+      site.installationOptions?.isExisting && 
+      site.status === 'completed'
+    );
     
-    if (existingSite) {
-      logger.warn('Existing site found - blocking registration', {
+    if (existingCompletedSite) {
+      logger.warn('Existing completed site found - blocking registration', {
         existingSite: {
-          id: existingSite._id,
-          domain: existingSite.domain,
-          status: existingSite.status,
-          isExisting: existingSite.installationOptions?.isExisting,
-          createdAt: existingSite.createdAt
+          id: existingCompletedSite._id,
+          domain: existingCompletedSite.domain,
+          status: existingCompletedSite.status,
+          createdAt: existingCompletedSite.createdAt
         }
       });
       res.status(400).json({
@@ -1664,28 +1674,91 @@ export async function addExistingSite(req: AuthRequest, res: Response): Promise<
       return;
     }
     
+    // Clean up any failed/incomplete attempts for the same site
+    const failedAttempts = duplicateCheck.filter(site => 
+      site.status !== 'completed'
+    );
+    
+    if (failedAttempts.length > 0) {
+      logger.info('Cleaning up failed installation attempts', {
+        failedAttempts: failedAttempts.map(site => ({
+          id: site._id,
+          status: site.status,
+          domain: site.domain
+        }))
+      });
+      
+      // Delete failed attempts
+      await Installation.deleteMany({
+        _id: { $in: failedAttempts.map(site => site._id) }
+      });
+    }
+    
     // Test WordPress connection
     try {
+      logger.info('Testing WordPress connection', {
+        url: normalizedUrl,
+        username: username ? '***' : undefined,
+        hasPassword: !!applicationPassword
+      });
+
       const authString = Buffer.from(`${username}:${applicationPassword}`).toString('base64');
       const testResponse = await fetch(`${normalizedUrl}/wp-json/wp/v2/users/me`, {
         headers: {
           'Authorization': `Basic ${authString}`,
-          'User-Agent': '8blogs/1.0'
-        }
+          'User-Agent': 'TatameBot/1.0'
+        },
+        timeout: 10000 // 10 second timeout
+      });
+      
+      logger.info('WordPress connection test response', {
+        status: testResponse.status,
+        statusText: testResponse.statusText,
+        ok: testResponse.ok
       });
       
       if (!testResponse.ok) {
+        const responseText = await testResponse.text().catch(() => '');
+        logger.warn('WordPress connection test failed', {
+          status: testResponse.status,
+          statusText: testResponse.statusText,
+          responseText: responseText.substring(0, 500)
+        });
+        
         res.status(400).json({
           success: false,
-          message: 'Falha na autenticação. Verifique suas credenciais.'
+          message: `Falha na autenticação WordPress (${testResponse.status}). Verifique suas credenciais e se as Application Passwords estão habilitadas.`
         });
         return;
       }
-    } catch (error) {
-      logger.error('WordPress connection test failed:', error);
+
+      const userData = await testResponse.json();
+      logger.info('WordPress connection successful', {
+        userDisplayName: userData.name,
+        userEmail: userData.email,
+        capabilities: Object.keys(userData.capabilities || {}).slice(0, 5)
+      });
+
+    } catch (error: any) {
+      logger.error('WordPress connection test failed:', {
+        error: error.message,
+        code: error.code,
+        stack: error.stack?.split('\n').slice(0, 3)
+      });
+      
+      let errorMessage = 'Não foi possível conectar ao WordPress.';
+      
+      if (error.message?.includes('fetch')) {
+        errorMessage = 'Erro de conexão. Verifique se o URL está correto e acessível.';
+      } else if (error.message?.includes('timeout')) {
+        errorMessage = 'Timeout na conexão. O site pode estar lento ou inacessível.';
+      } else if (error.message?.includes('DNS')) {
+        errorMessage = 'URL não encontrado. Verifique se o endereço está correto.';
+      }
+      
       res.status(400).json({
         success: false,
-        message: 'Não foi possível conectar ao WordPress. Verifique as credenciais.'
+        message: errorMessage
       });
       return;
     }

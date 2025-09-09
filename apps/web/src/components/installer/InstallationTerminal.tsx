@@ -85,12 +85,22 @@ export const InstallationTerminal: React.FC<InstallationTerminalProps> = ({
     console.log('🎬 InstallationTerminal: Component mounted with installationId:', installationId);
     console.log('🔧 DEBUG: Frontend completion fix v2 - with enhanced logging');
     
+    // Show immediate feedback that installation is starting
+    addOutput('🚀 Iniciando instalação do WordPress...');
+    addOutput(`📍 Domínio: ${domain}`);
+    addOutput(`📦 Template: ${templateName}`);
+    addOutput('⏳ Estabelecendo conexão...');
+    
     // Connect to WebSocket
     const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
+    const token = localStorage.getItem('access_token');
+    console.log('🔐 WebSocket connecting with token:', token ? `${token.substring(0, 20)}...` : 'null');
+    
     const newSocket = io(socketUrl, {
       withCredentials: true,
       query: {
-        installationId
+        installationId,
+        token: token || ''
       },
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,
@@ -257,9 +267,16 @@ export const InstallationTerminal: React.FC<InstallationTerminalProps> = ({
     // This ensures we catch completions even if Socket.IO events are missed
     setTimeout(() => {
       console.log('Starting polling for installation status updates');
+      addOutput('🔍 Iniciando monitoramento da instalação...');
+      
         pollInterval = setInterval(async () => {
           try {
             console.log('🔍 Polling installation status for:', installationId);
+            
+            // Check if token exists before making request
+            const currentToken = localStorage.getItem('access_token');
+            console.log('📡 Making API request with token:', currentToken ? `${currentToken.substring(0, 20)}...` : 'null');
+            
             const response = await api.get(`/api/sites/installation-status/${installationId}`);
             console.log('📊 Poll response:', response.data);
             if (response.data.success && response.data.installation) {
@@ -312,8 +329,33 @@ export const InstallationTerminal: React.FC<InstallationTerminalProps> = ({
                 }, 2000);
               }
             }
-          } catch (error) {
-            console.error('Error polling installation status:', error);
+          } catch (error: any) {
+            console.error('❌ Error polling installation status:', error);
+            
+            // Check if it's an authentication error
+            if (error.response?.status === 401) {
+              console.error('🔐 Authentication failed - token might be missing or invalid');
+              addOutput('❌ Erro de autenticação - fazendo login novamente...');
+              
+              // Try to get fresh token from localStorage
+              const token = localStorage.getItem('access_token');
+              console.log('🔍 Current token from localStorage:', token ? `${token.substring(0, 20)}...` : 'null');
+              
+              // Add visual feedback about auth error
+              addOutput('⚠️ Tentando reestabelecer conexão...');
+              
+              // Show specific error in terminal
+              if (error.response?.data?.message) {
+                addOutput(`❌ ${error.response.data.message}`);
+              }
+            } else if (error.response?.status === 404) {
+              console.error('📍 Installation not found - might still be starting');
+              addOutput('⏳ Instalação ainda inicializando...');
+            } else {
+              // Generic error handling
+              console.error('❌ Network or other error:', error.message);
+              addOutput(`❌ Erro de conexão: ${error.message || 'Erro desconhecido'}`);
+            }
           }
         }, 5000); // Poll every 5 seconds
     }, 10000); // Start polling after 10 seconds

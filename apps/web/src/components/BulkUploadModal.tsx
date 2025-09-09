@@ -105,18 +105,35 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
     isPublishing: false
   });
 
+  // Add timeout detection for stuck processing
+  const [processingTimeout, setProcessingTimeout] = useState<NodeJS.Timeout | null>(null);
+  
   // Job status tracking
   const {
     job: currentJob,
     isLoading: jobLoading,
     error: jobError,
     startPolling,
-    stopPolling
+    stopPolling,
+    isPolling
   } = useJobStatus({
     jobId: currentJobId,
     enabled: !!currentJobId,
     onComplete: (job) => {
-      console.log('✅ Job completed:', job);
+      console.log('✅ [BULK-MODAL] Job completed successfully:', {
+        jobId: job.id,
+        status: job.status,
+        progress: job.progress,
+        stats: job.results.stats,
+        completedCount: job.results.completed.length
+      });
+      
+      // Clear timeout
+      if (processingTimeout) {
+        clearTimeout(processingTimeout);
+        setProcessingTimeout(null);
+      }
+      
       setIsProcessing(false);
       setCurrentStep('results');
       
@@ -147,6 +164,11 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
         }
       }));
       
+      console.log('🔄 [BULK-MODAL] Setting results:', {
+        convertedResultsCount: convertedResults.length,
+        firstResult: convertedResults[0]?.title
+      });
+      
       setResults(convertedResults);
       setGenerationSummary({
         total: job.results.stats.totalReviews,
@@ -158,26 +180,36 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
       toast.success(`${job.results.stats.successfulReviews} reviews geradas com sucesso!`);
     },
     onProgress: (job) => {
-      console.log('📈 Job progress:', job.progress);
+      console.log('📈 [BULK-MODAL] Job progress update:', {
+        jobId: job.id,
+        status: job.status,
+        progress: job.progress,
+        currentStep: job.currentStep,
+        completedReviews: job.results?.completed?.length || 0,
+        isPollingActive: isPolling
+      });
       // Progress is handled by the JobProgressCard component
     },
     onError: (error) => {
-      console.error('❌ Job failed:', error);
+      console.error('❌ [BULK-MODAL] Job failed with error:', {
+        error,
+        message: error?.message,
+        jobId: currentJobId
+      });
+      
+      // Clear timeout
+      if (processingTimeout) {
+        clearTimeout(processingTimeout);
+        setProcessingTimeout(null);
+      }
+      
       setIsProcessing(false);
       setCurrentStep('results');
       toast.error('Erro na geração de reviews: ' + (error?.message || 'Erro desconhecido'));
     },
     pollInterval: 2000
   });
-  const [selectedReviews, setSelectedReviews] = useState<Set<number>>(new Set());
-  const [isBulkPublishing, setIsBulkPublishing] = useState(false);
-  const [bulkPublishModal, setBulkPublishModal] = useState<{
-    isOpen: boolean;
-    selectedCount: number;
-  }>({
-    isOpen: false,
-    selectedCount: 0
-  });
+  // Removed bulk selection state as part of simplified completion flow
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -203,6 +235,21 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
       loadWordPressSites();
     }
   }, [isOpen]);
+
+  // Start polling when job ID changes
+  useEffect(() => {
+    if (currentJobId) {
+      console.log('🔄 [BULK-MODAL] Job ID changed, starting polling:', {
+        jobId: currentJobId,
+        currentStep,
+        isProcessing,
+        isPollingActive: isPolling
+      });
+      startPolling();
+    } else {
+      console.log('❌ [BULK-MODAL] No job ID available, cannot start polling');
+    }
+  }, [currentJobId, startPolling]);
 
   const loadWordPressSites = async () => {
     try {
@@ -293,6 +340,11 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
 
       try {
         console.log(`🚀 Starting queue-based bulk generation of ${reviewsData.length} reviews`);
+        console.log('📝 WordPress Publishing Parameters:', {
+          publishToWordPress,
+          selectedSiteId,
+          willPublish: publishToWordPress && selectedSiteId ? 'YES' : 'NO'
+        });
         
         const response = await api.post('/api/reviews/queue-bulk-generate', {
           reviews: reviewsData.map(review => ({
@@ -307,13 +359,33 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
         if (response.data.success) {
           const { jobId, reviewCount, estimatedTime } = response.data.data;
           
-          console.log('🎯 Job queued successfully:');
-          console.log('  Job ID:', jobId);
-          console.log('  Reviews:', reviewCount);
-          console.log('  Estimated Time:', estimatedTime, 'seconds');
+          console.log('🎯 [BULK-MODAL] Job queued successfully:', {
+            jobId,
+            reviewCount,
+            estimatedTime,
+            responseData: response.data
+          });
           
           // Set the job ID to start polling
+          console.log('📝 [BULK-MODAL] Setting job ID to start polling:', jobId);
           setCurrentJobId(jobId);
+          
+          // Verify the job ID was set
+          setTimeout(() => {
+            console.log('🔍 [BULK-MODAL] Job ID verification after setState:', {
+              setJobId: jobId,
+              currentStateJobId: currentJobId,
+              // Note: currentJobId may not be updated yet due to async setState
+            });
+          }, 100);
+          
+          // Set timeout to detect stuck jobs (3x estimated time + 5 minutes buffer)
+          const timeoutMs = Math.max((estimatedTime * 3 + 300) * 1000, 10 * 60 * 1000); // Min 10 minutes
+          const timeout = setTimeout(() => {
+            console.log('⏰ [BULK-MODAL] Job timeout detected - job may be stuck');
+            toast.error('O job parece estar travado. Use o botão "Forçar" para fechar.');
+          }, timeoutMs);
+          setProcessingTimeout(timeout);
           
           toast.success(`${reviewCount} reviews na fila! Tempo estimado: ${Math.round(estimatedTime / 60)} min`);
           
@@ -323,20 +395,47 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
           throw new Error(response.data.message || 'Failed to queue bulk generation');
         }
       } catch (error: any) {
-        console.error('Bulk generation error:', error);
+        console.error('🚨 [BULK-GENERATION] Full error details:', {
+          error,
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url,
+          method: error.config?.method
+        });
+        
+        // Get the actual error message from the API response
+        let errorMessage = 'Erro na geração em massa';
+        
+        if (error.response?.data?.message) {
+          // API returned an error message
+          errorMessage = error.response.data.message;
+        } else if (error.response?.data?.error) {
+          // API returned an error field
+          errorMessage = error.response.data.error;
+        } else if (error.response?.status === 404) {
+          errorMessage = `Endpoint não encontrado: ${error.config?.method?.toUpperCase()} ${error.config?.url}`;
+        } else if (error.response?.status) {
+          errorMessage = `Erro ${error.response.status}: ${error.response.statusText}`;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        console.error('🚨 [BULK-GENERATION] Processed error message:', errorMessage);
         
         // Mark all as error
         const errorResults = results.map(result => ({
           ...result,
           status: 'error' as const,
-          error: error.response?.data?.message || error.message || 'Erro na geração em massa'
+          error: errorMessage
         }));
         
         setResults(errorResults);
         setIsProcessing(false);
         setCurrentStep('results');
         
-        toast.error('Falha na geração em massa: ' + (error.response?.data?.message || error.message));
+        toast.error(`Falha na geração em massa: ${errorMessage}`);
         
         throw error;
       }
@@ -370,6 +469,12 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
   };
 
   const handleClose = () => {
+    // Clear timeout
+    if (processingTimeout) {
+      clearTimeout(processingTimeout);
+      setProcessingTimeout(null);
+    }
+    
     // Clean up state
     setUploadedFile(null);
     setParsedData([]);
@@ -377,18 +482,39 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
     setCurrentStep('upload');
     setIsProcessing(false);
     setGenerationSummary(null);
-    setPublishToWordPress(false);
-    setSelectedSiteId('');
+    // Keep publishToWordPress as true since it's mandatory for bulk generation
+    setSelectedSiteId(''); // Reset site selection so user must choose again
     setCurrentJobId(null);
-    setSelectedReviews(new Set());
     closeWordPressPublishModal();
-    closeBulkPublishModal();
     
     // Stop polling
     stopPolling();
     
     onClose();
   };
+
+  const handleForceClose = () => {
+    console.log('🚨 Force closing modal during processing');
+    
+    // Clear timeout
+    if (processingTimeout) {
+      clearTimeout(processingTimeout);
+      setProcessingTimeout(null);
+    }
+    
+    setIsProcessing(false);
+    stopPolling();
+    handleClose();
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (processingTimeout) {
+        clearTimeout(processingTimeout);
+      }
+    };
+  }, [processingTimeout]);
 
 
   const openWordPressPublishModal = (reviewId: string, title: string) => {
@@ -453,95 +579,9 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
     });
   };
 
-  const selectAllReviews = () => {
-    const successfulIndexes = results
-      .map((result, index) => ({ result, index }))
-      .filter(({ result }) => result.status === 'success')
-      .map(({ index }) => index);
-    
-    setSelectedReviews(new Set(successfulIndexes));
-  };
+  // Selection functions removed as part of simplified completion flow
 
-  const deselectAllReviews = () => {
-    setSelectedReviews(new Set());
-  };
-
-  const openBulkPublishModal = () => {
-    setBulkPublishModal({
-      isOpen: true,
-      selectedCount: selectedReviews.size
-    });
-  };
-
-  const closeBulkPublishModal = () => {
-    setBulkPublishModal({
-      isOpen: false,
-      selectedCount: 0
-    });
-  };
-
-  const bulkPublishToWordPress = async (siteId: string) => {
-    setIsBulkPublishing(true);
-    
-    try {
-      const selectedIndexes = Array.from(selectedReviews);
-      const reviewIds = selectedIndexes
-        .map(index => results[index])
-        .filter(result => result.status === 'success' && result.reviewId)
-        .map(result => result.reviewId);
-
-      if (reviewIds.length === 0) {
-        toast.error('Nenhum review válido selecionado');
-        return;
-      }
-
-      console.log(`🚀 Starting bulk publish of ${reviewIds.length} reviews to site ${siteId}`);
-
-      const response = await api.post('/api/reviews/bulk-publish', {
-        reviewIds: reviewIds,
-        wordPressSiteId: siteId
-      });
-
-      if (response.data.success) {
-        const summary = response.data.data.summary;
-        const results = response.data.data.results;
-        
-        // Show success message
-        toast.success(`🎉 ${summary.successful} reviews publicados no WordPress!`);
-        
-        if (summary.failed > 0) {
-          toast.error(`❌ ${summary.failed} reviews falharam na publicação`);
-        }
-
-        if (summary.skipped > 0) {
-          toast.warn(`⚠️ ${summary.skipped} reviews já estavam publicados`);
-        }
-
-        // Redirect to WordPress admin posts page
-        const site = wordPressSites.find(s => s._id === siteId);
-        if (site && summary.successful > 0) {
-          const adminUrl = `${site.url.replace(/\/$/, '')}/wp-admin/edit.php?post_type=post&post_status=draft`;
-          
-          setTimeout(() => {
-            window.open(adminUrl, '_blank');
-            toast.success(`🎉 Abrindo painel do WordPress com seus ${summary.successful} novos rascunhos!`);
-          }, 1000);
-        }
-
-        // Clear selections
-        setSelectedReviews(new Set());
-        closeBulkPublishModal();
-        
-      } else {
-        toast.error('Erro na publicação em massa');
-      }
-    } catch (error: any) {
-      console.error('Error bulk publishing:', error);
-      toast.error('Erro ao publicar reviews no WordPress');
-    } finally {
-      setIsBulkPublishing(false);
-    }
-  };
+  // Bulk publishing functions removed as part of simplified completion flow
 
 
   const handleStartProcessing = () => {
@@ -551,7 +591,8 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-glow max-w-4xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-soft">
@@ -561,13 +602,29 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
             </h3>
             <p className="text-tatame-gray-600">Crie dezenas de reviews profissionais em poucos minutos com inteligência artificial</p>
           </div>
-          <button
-            onClick={handleClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
-            disabled={isProcessing}
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {isProcessing && (
+              <button
+                onClick={handleForceClose}
+                className="text-red-500 hover:text-red-700 transition-colors text-sm font-medium flex items-center gap-1 px-2 py-1 rounded bg-red-50 hover:bg-red-100"
+                title="Forçar fechamento"
+              >
+                <X size={14} />
+                Forçar
+              </button>
+            )}
+            <button
+              onClick={isProcessing ? undefined : handleClose}
+              className={`transition-colors ${
+                isProcessing 
+                  ? 'text-slate-300 cursor-not-allowed' 
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
+              disabled={isProcessing}
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -974,19 +1031,44 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
               <div className="text-center mb-6">
                 <h4 className="font-bold text-slate-900 text-xl mb-2">🤖 IA Trabalhando para Você</h4>
                 <p className="text-slate-600">Reviews sendo geradas em segundo plano...</p>
+                {currentJobId && (
+                  <p className="text-xs text-gray-500 mt-1">Job ID: {currentJobId}</p>
+                )}
               </div>
 
               {currentJob && (
-                <JobProgressCard 
-                  job={currentJob} 
-                  className="border-2 border-blue-200 shadow-lg"
-                />
+                <>
+                  <JobProgressCard 
+                    job={currentJob} 
+                    className="border-2 border-blue-200 shadow-lg"
+                    hideCompletionDetails={false}
+                  />
+                  <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600">
+                    <strong>Status:</strong> {currentJob.status} | <strong>Progresso:</strong> {currentJob.progress.current}/{currentJob.progress.total} ({currentJob.progress.percentage}%)
+                    {currentJob.currentStep && <span> | <strong>Etapa:</strong> {currentJob.currentStep}</span>}
+                    <br />
+                    <strong>Job ID:</strong> {currentJob.id} | <strong>Polling:</strong> {isPolling ? '🟢 Ativo' : '🔴 Inativo'}
+                    {currentJob.results && <span> | <strong>Concluídos:</strong> {currentJob.results.completed?.length || 0}</span>}
+                  </div>
+                </>
               )}
 
-              {!currentJob && (
+              {!currentJob && currentJobId && (
                 <div className="text-center py-8">
                   <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
                   <p className="text-gray-600">Conectando ao sistema de fila...</p>
+                  <p className="text-xs text-gray-500 mt-2">Aguardando resposta da API...</p>
+                  <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 mt-4">
+                    <strong>Job ID:</strong> {currentJobId} | <strong>Polling:</strong> {isPolling ? '🟢 Ativo' : '🔴 Inativo'} | <strong>Loading:</strong> {jobLoading ? '🔄 Sim' : '❌ Não'}
+                    {jobError && <span> | <strong>Erro:</strong> {jobError.message}</span>}
+                  </div>
+                </div>
+              )}
+
+              {!currentJob && !currentJobId && (
+                <div className="text-center py-8">
+                  <Loader2 className="w-8 h-8 text-amber-500 animate-spin mx-auto mb-4" />
+                  <p className="text-gray-600">Iniciando processamento...</p>
                 </div>
               )}
 
@@ -994,364 +1076,103 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
                 <p className="text-sm text-blue-700">
                   💡 <strong>Dica:</strong> Você pode fechar esta janela. O progresso continuará em segundo plano!
                 </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Se o modal travar, use o botão "Forçar" para fechá-lo
+                </p>
               </div>
             </div>
           )}
 
           {currentStep === 'results' && (
             <div className="space-y-6">
-              {/* Check if auto-publish was used */}
-              {publishToWordPress && selectedSiteId && generationSummary && generationSummary.publishedToWordPress > 0 ? (
-                // Simplified success screen for auto-published content
-                <div className="text-center py-8">
-                  <div className="relative mb-6">
-                    <div className="w-24 h-24 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                      <CheckCircle className="w-12 h-12 text-white" />
-                    </div>
-                    <div className="absolute -inset-3 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full blur opacity-30"></div>
+              {/* Simplified "Go to WordPress" screen - always used */}
+              <div className="text-center py-8">
+                <div className="relative mb-6">
+                  <div className="w-24 h-24 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    <CheckCircle className="w-12 h-12 text-white" />
                   </div>
+                  <div className="absolute -inset-3 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full blur opacity-30"></div>
+                </div>
+                
+                <h4 className="font-bold text-slate-900 text-3xl mb-3">🎉 Tudo Pronto!</h4>
+                <p className="text-slate-600 text-lg mb-6">
+                  {generationSummary ? (
+                    <>
+                      <span className="font-semibold text-green-600">{generationSummary.successful} reviews</span> foram gerados{publishToWordPress && selectedSiteId ? ' e publicados' : ''} com sucesso
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-semibold text-green-600">{results.filter(r => r.status === 'success').length} reviews</span> foram gerados{publishToWordPress && selectedSiteId ? ' e publicados' : ''} com sucesso
+                    </>
+                  )}
+                </p>
+                
+                {/* Direct action button */}
+                <div className="max-w-md mx-auto">
+                  <button
+                    onClick={() => {
+                      const site = wordPressSites.find(s => s._id === selectedSiteId);
+                      if (site) {
+                        const adminUrl = `${site.url.replace(/\/$/, '')}/wp-admin/edit.php?post_type=post&post_status=draft`;
+                        window.open(adminUrl, '_blank');
+                        toast.success('🎉 Abrindo seu painel do WordPress!');
+                      }
+                    }}
+                    className="w-full gradient-primary hover:shadow-glow text-white font-bold py-4 px-8 rounded-2xl transition-all duration-200 shadow-medium hover:shadow-glow transform hover:scale-105 text-lg flex items-center justify-center gap-3"
+                  >
+                    <span>🌐 Ir para o Blog</span>
+                  </button>
                   
-                  <h4 className="font-bold text-slate-900 text-3xl mb-3">🎉 Tudo Pronto!</h4>
-                  <p className="text-slate-600 text-lg mb-6">
-                    <span className="font-semibold text-green-600">{generationSummary.publishedToWordPress} reviews</span> foram criados e publicados no seu WordPress
+                  <p className="text-xs text-slate-500 mt-3">
+                    ✨ Seus reviews estão como rascunhos prontos para revisão e publicação
                   </p>
-                  
-                  {/* Direct action button */}
-                  <div className="max-w-md mx-auto">
-                    <button
-                      onClick={() => {
-                        const site = wordPressSites.find(s => s._id === selectedSiteId);
-                        if (site) {
-                          const adminUrl = `${site.url.replace(/\/$/, '')}/wp-admin/edit.php?post_type=post&post_status=draft`;
-                          window.open(adminUrl, '_blank');
-                          toast.success('🎉 Abrindo seu painel do WordPress!');
-                        }
-                      }}
-                      className="w-full gradient-primary hover:shadow-glow text-white font-bold py-4 px-8 rounded-2xl transition-all duration-200 shadow-medium hover:shadow-glow transform hover:scale-105 text-lg flex items-center justify-center gap-3"
-                    >
-                      <span>🌐 Ir para o Blog</span>
-                    </button>
-                    
-                    <p className="text-xs text-slate-500 mt-3">
-                      ✨ Seus reviews estão como rascunhos prontos para revisão e publicação
+                </div>
+
+                {/* Show failed count if any */}
+                {((generationSummary && generationSummary.failed > 0) || (!generationSummary && results.filter(r => r.status === 'failed').length > 0)) && (
+                  <div className="mt-6 bg-red-50 border border-red-200 rounded-2xl p-4 max-w-md mx-auto">
+                    <p className="text-red-700 text-sm">
+                      ⚠️ {generationSummary ? generationSummary.failed : results.filter(r => r.status === 'failed').length} reviews falharam na geração
                     </p>
                   </div>
-
-                  {generationSummary.failed > 0 && (
-                    <div className="mt-6 bg-red-50 border border-red-200 rounded-2xl p-4 max-w-md mx-auto">
-                      <p className="text-red-700 text-sm">
-                        ⚠️ {generationSummary.failed} reviews falharam na geração
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                // Original detailed results screen for manual workflow
-                <>
-                  <div className="text-center">
-                    <div className="relative mb-6">
-                      <div className="w-20 h-20 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                        <CheckCircle className="w-10 h-10 text-white" />
-                      </div>
-                      <div className="absolute -inset-2 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full blur opacity-30"></div>
-                    </div>
-                    <h4 className="font-bold text-slate-900 text-2xl mb-2">🎉 Missão Cumprida!</h4>
-                    {generationSummary ? (
-                      <div className="text-sm text-slate-600 space-y-1">
-                        <p>
-                          <span className="text-green-600 font-medium">{generationSummary.successful}</span> de {generationSummary.total} reviews geradas com sucesso
-                        </p>
-                        {generationSummary.failed > 0 && (
-                          <p className="text-red-600">
-                            {generationSummary.failed} falharam
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-600">
-                        {results.filter(r => r.status === 'success').length} de {results.length} reviews geradas com sucesso
-                      </p>
-                    )}
-                  </div>
-
-              {/* Bulk Actions Bar */}
-              {results.filter(r => r.status === 'success').length > 1 && (
-                <div className="bg-gradient-to-r from-tatame-red/5 to-coral/5 border border-tatame-red/20 rounded-2xl p-4 mb-4">
-                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="text-sm text-tatame-gray-700">
-                        <span className="font-semibold">{selectedReviews.size}</span> de{' '}
-                        <span className="font-semibold">{results.filter(r => r.status === 'success').length}</span> selecionados
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={selectAllReviews}
-                          className="text-xs text-tatame-red hover:text-tatame-red/80 font-medium"
-                        >
-                          Selecionar Todos
-                        </button>
-                        <span className="text-tatame-gray-300">•</span>
-                        <button
-                          onClick={deselectAllReviews}
-                          className="text-xs text-tatame-gray-600 hover:text-tatame-gray-800 font-medium"
-                        >
-                          Desmarcar Todos
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {selectedReviews.size > 0 && (
-                      <button
-                        onClick={openBulkPublishModal}
-                        disabled={isBulkPublishing || wordPressSites.length === 0}
-                        className="gradient-primary hover:shadow-glow text-white px-4 py-2 rounded-2xl transition-all duration-200 font-semibold shadow-medium hover:shadow-glow transform hover:scale-105 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                      >
-                        {isBulkPublishing ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Publicando...
-                          </>
-                        ) : (
-                          <>
-                            <FileText className="w-4 h-4" />
-                            📚 Publicar {selectedReviews.size} no WordPress
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  
-                  {wordPressSites.length === 0 && (
-                    <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800">
-                      ⚠️ Configure um site WordPress no seu perfil para usar a publicação em massa
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Generation Summary Card */}
-              {generationSummary && (
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 mb-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <CheckCircle className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div>
-                      <h5 className="font-bold text-green-900 text-lg">🎉 Conteúdo Criado com Sucesso!</h5>
-                      <p className="text-green-700 text-sm">Seus reviews foram gerados pela IA em {(generationSummary.totalTime / 1000).toFixed(1)} segundos</p>
-                    </div>
-                  </div>
-                  <div className="bg-white/70 rounded-xl p-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-green-600" />
-                        <span className="text-slate-700">Reviews Criados:</span>
-                        <span className="font-bold text-green-600">{generationSummary.successful}</span>
-                      </div>
-                      {generationSummary.publishedToWordPress > 0 && (
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4 text-blue-600" />
-                          <span className="text-slate-700">Publicados:</span>
-                          <span className="font-bold text-blue-600">{generationSummary.publishedToWordPress}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {results.map((result, index) => (
-                  <div key={index} className="border border-slate-200 rounded-2xl p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-start gap-3 flex-1">
-                        {result.status === 'success' && (
-                          <input
-                            type="checkbox"
-                            checked={selectedReviews.has(index)}
-                            onChange={() => toggleReviewSelection(index)}
-                            className="mt-1 h-4 w-4 text-tatame-red focus:ring-tatame-red border-gray-300 rounded cursor-pointer"
-                          />
-                        )}
-                        <h6 className="font-medium text-slate-900 flex-1 pr-4">
-                          {result.title}
-                        </h6>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {result.status === 'success' && (
-                          <>
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-xs text-green-600 font-medium">✅ Pronto</span>
-                          </>
-                        )}
-                        {result.status === 'error' && (
-                          <>
-                            <AlertCircle className="w-4 h-4 text-red-600" />
-                            <span className="text-xs text-red-600 font-medium">❌ Erro</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {result.status === 'success' && result.details && (
-                      <div className="text-sm bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="font-medium text-green-800">Review gerado com sucesso!</span>
-                          </div>
-                          <button
-                            onClick={() => openWordPressPublishModal(result.reviewId || '', result.title)}
-                            className="text-xs bg-tatame-red text-white px-3 py-1 rounded-full hover:bg-tatame-red/90 transition-colors font-medium"
-                          >
-                            📝 Publicar
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-
-                    {result.status === 'error' && result.error && (
-                      <div className="bg-red-50 rounded-2xl p-4 border-l-4 border-red-400">
-                        <div className="flex items-start gap-3">
-                          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                          <div className="flex-1">
-                            <h6 className="font-semibold text-red-900 mb-1">❌ Falha na Geração</h6>
-                            <p className="text-sm text-red-700 mb-2">{result.error}</p>
-                            
-                            {/* Error solutions */}
-                            <div className="bg-white/70 rounded-lg p-3 text-xs text-red-600">
-                              <p className="font-medium mb-1">💡 Possíveis soluções:</p>
-                              <ul className="list-disc list-inside space-y-0.5">
-                                <li>Verifique se os links dos produtos estão funcionando</li>
-                                <li>Certifique-se que o título não está duplicado</li>
-                                <li>Tente novamente em alguns minutos</li>
-                              </ul>
-                            </div>
-                            
-                            {/* Retry button could be added here in future */}
-                            <div className="mt-3 flex gap-2">
-                              <button className="text-xs bg-red-600 text-white px-3 py-1 rounded-full hover:bg-red-700 transition-colors">
-                                🔄 Tentar Novamente
-                              </button>
-                              <button className="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-300 transition-colors">
-                                ⏭️ Pular
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                )}
               </div>
-
-                  <button
-                    onClick={handleClose}
-                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold py-4 px-8 rounded-2xl transition-all duration-200 shadow-medium hover:shadow-glow transform hover:scale-105 text-lg"
-                  >
-                    🎉 Finalizar e Fechar
-                  </button>
-                </>
-              )}
             </div>
           )}
         </div>
+
+        <div className="sticky bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-200 flex justify-between items-center rounded-b-2xl">
+          <button
+            onClick={onClose}
+            className="text-slate-600 hover:text-slate-800 font-medium py-2 px-4 rounded-xl transition-colors duration-200"
+          >
+            Fechar
+          </button>
+          
+          {currentStep === 'processing' && currentJob?.status !== 'completed' && (
+            <button
+              onClick={() => {
+                console.log('🔴 [BULK-MODAL] Force close requested - stopping polling and closing modal');
+                stopPolling();
+                setCurrentStep('upload');
+                setCurrentJobId(null);
+                setIsProcessing(false);
+                if (processingTimeout) {
+                  clearTimeout(processingTimeout);
+                  setProcessingTimeout(null);
+                }
+                toast.info('Modal fechado. O processamento continua em segundo plano.');
+              }}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-xl transition-colors duration-200"
+            >
+              Forçar Fechamento
+            </button>
+          )}
+        </div>
+      </div>
       </div>
 
-
-      {/* Bulk Publishing Modal */}
-      {bulkPublishModal.isOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
-          <div className="bg-white rounded-2xl shadow-glow max-w-md w-full overflow-hidden">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-tatame-red to-coral text-white p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 pr-4">
-                  <h3 className="text-xl font-bold mb-1">📚 Publicação em Massa</h3>
-                  <p className="text-white/90 text-sm">{bulkPublishModal.selectedCount} reviews selecionados</p>
-                </div>
-                <button
-                  onClick={closeBulkPublishModal}
-                  className="text-white/70 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors"
-                  disabled={isBulkPublishing}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Content */}
-            <div className="p-6">
-              <p className="text-tatame-gray-600 mb-4">
-                Escolha o site WordPress onde deseja publicar todos os {bulkPublishModal.selectedCount} reviews selecionados como rascunho:
-              </p>
-
-              {wordPressSites.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 bg-tatame-red/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <AlertCircle className="w-8 h-8 text-tatame-red" />
-                  </div>
-                  <p className="text-tatame-gray-600 mb-4">Nenhum site WordPress configurado</p>
-                  <p className="text-sm text-tatame-gray-500">Configure um site no seu perfil primeiro</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {wordPressSites.map((site) => (
-                    <button
-                      key={site._id}
-                      onClick={() => bulkPublishToWordPress(site._id)}
-                      disabled={isBulkPublishing}
-                      className="w-full p-4 text-left border border-slate-200 rounded-2xl hover:border-tatame-red hover:bg-red-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-semibold text-slate-900 group-hover:text-tatame-red">
-                            {site.name || site.url}
-                          </h4>
-                          <p className="text-sm text-slate-600">{site.url}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className={`w-2 h-2 rounded-full ${
-                              site.isActive ? 'bg-green-500' : 'bg-yellow-500'
-                            }`}></span>
-                            <span className="text-xs text-slate-500">{site.isActive ? 'Ativo' : 'Inativo'}</span>
-                          </div>
-                        </div>
-                        {isBulkPublishing ? (
-                          <Loader2 className="w-5 h-5 text-tatame-red animate-spin" />
-                        ) : (
-                          <div className="text-center">
-                            <FileText className="w-5 h-5 text-slate-400 group-hover:text-tatame-red mx-auto" />
-                            <div className="text-xs text-slate-500 mt-1 group-hover:text-tatame-red">
-                              {bulkPublishModal.selectedCount} rascunhos
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="bg-slate-50 px-6 py-4 border-t border-soft">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-slate-600">
-                  ✨ Todos os artigos serão criados como rascunhos para revisão
-                </p>
-                <button
-                  onClick={closeBulkPublishModal}
-                  disabled={isBulkPublishing}
-                  className="text-sm text-tatame-gray-600 hover:text-tatame-red font-medium disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Bulk Publish Modal - Removed as part of simplified completion flow */}
 
       {/* WordPress Publishing Modal */}
       {wordPressPublishModal.isOpen && (
@@ -1439,6 +1260,6 @@ export const BulkUploadModal: React.FC<BulkUploadModalProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };

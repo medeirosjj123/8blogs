@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Link, Globe } from 'lucide-react';
 import { api } from '../../services/api';
 import toast from 'react-hot-toast';
+import { debugLogger } from '../../utils/debugLogger';
 
 interface AddExistingBlogModalProps {
   isOpen: boolean;
@@ -35,6 +36,17 @@ export const AddExistingBlogModal: React.FC<AddExistingBlogModalProps> = ({
   if (!isOpen) return null;
 
   const handleConnect = async () => {
+    debugLogger.info('EXISTING_BLOG_MODAL', 'Starting blog connection process', { 
+      modal: 'AddExistingBlogModal',
+      formData: {
+        name: formData.name,
+        url: formData.url,
+        username: formData.username,
+        hasPassword: !!formData.applicationPassword,
+        googleAnalyticsId: formData.googleAnalyticsId
+      }
+    });
+
     // Reset errors
     setErrors({});
 
@@ -44,17 +56,55 @@ export const AddExistingBlogModal: React.FC<AddExistingBlogModalProps> = ({
       if (!formData.url) newErrors.url = 'URL é obrigatória';
       if (!formData.username) newErrors.username = 'Usuário é obrigatório';
       if (!formData.applicationPassword) newErrors.applicationPassword = 'Senha de aplicação é obrigatória';
+      
+      debugLogger.warning('EXISTING_BLOG_MODAL', 'Form validation failed', { 
+        errors: newErrors,
+        formData: {
+          url: !!formData.url,
+          username: !!formData.username,
+          applicationPassword: !!formData.applicationPassword
+        }
+      });
+      
       setErrors(newErrors);
       return;
     }
 
     setIsConnecting(true);
+    debugLogger.info('EXISTING_BLOG_MODAL', 'Form validation passed, making API call', {
+      endpoint: '/api/sites/existing',
+      method: 'POST'
+    });
+
+    const startTime = Date.now();
+    let requestId: string | undefined;
     
     try {
+      // Log the API call with sanitized data
+      requestId = debugLogger.logApiCall('/api/sites/existing', 'POST', {
+        ...formData,
+        applicationPassword: '[REDACTED]' // Don't log sensitive data
+      });
+
       const response = await api.post('/api/sites/existing', formData);
       const result = response.data;
+      const duration = Date.now() - startTime;
+
+      debugLogger.logApiResponse(requestId, result, response.status, duration);
+
+      debugLogger.info('EXISTING_BLOG_MODAL', 'API response received', { 
+        success: result.success,
+        hasMessage: !!result.message,
+        responseKeys: Object.keys(result),
+        duration
+      }, requestId);
 
       if (result.success) {
+        debugLogger.success('EXISTING_BLOG_MODAL', 'Blog connected successfully', {
+          url: formData.url,
+          name: formData.name
+        }, requestId);
+
         toast.success('🎉 Blog conectado com sucesso!');
         onSuccess();
         onClose();
@@ -67,7 +117,17 @@ export const AddExistingBlogModal: React.FC<AddExistingBlogModalProps> = ({
         });
       } else {
         const message = result.message || 'Falha na conexão. Verifique suas credenciais.';
+        
+        debugLogger.warning('EXISTING_BLOG_MODAL', 'API returned success=false', { 
+          message,
+          result
+        }, requestId);
+
         if (message.includes('já está registrado')) {
+          debugLogger.info('EXISTING_BLOG_MODAL', 'Blog already registered error', {
+            url: formData.url
+          }, requestId);
+          
           setErrors({ 
             url: '⚠️ Este blog já está registrado na plataforma. Você já pode vê-lo no seu dashboard.' 
           });
@@ -78,6 +138,23 @@ export const AddExistingBlogModal: React.FC<AddExistingBlogModalProps> = ({
         }
       }
     } catch (error: any) {
+      const duration = Date.now() - startTime;
+      
+      if (requestId) {
+        debugLogger.logApiError(requestId, error, duration);
+      }
+
+      debugLogger.error('EXISTING_BLOG_MODAL', 'Connection error occurred', {
+        error: {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data
+        },
+        url: formData.url,
+        duration
+      }, requestId);
+
       console.error('Connection error:', error);
       const message = error.response?.data?.message || 'Erro ao conectar. Tente novamente.';
       setErrors({ 
@@ -85,6 +162,9 @@ export const AddExistingBlogModal: React.FC<AddExistingBlogModalProps> = ({
       });
     } finally {
       setIsConnecting(false);
+      debugLogger.info('EXISTING_BLOG_MODAL', 'Connection process completed', {
+        isConnecting: false
+      }, requestId);
     }
   };
 

@@ -34,10 +34,21 @@ export const getUserWordPressSites = async (req: AuthRequest, res: Response) => 
 export const addWordPressSite = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user?.userId;
-    const { name, url, username, applicationPassword, isDefault } = req.body;
+    const { name, url, username, applicationPassword, isDefault, siteType, vpsConfig } = req.body;
+
+    console.log('🔄 Adding WordPress site:', {
+      userId,
+      name,
+      url,
+      username: username ? '***' : undefined,
+      hasPassword: !!applicationPassword,
+      siteType,
+      hasVpsConfig: !!vpsConfig
+    });
 
     // Check if user is authenticated
     if (!userId) {
+      console.log('❌ User not authenticated');
       return res.status(401).json({
         success: false,
         message: 'User not authenticated'
@@ -46,43 +57,75 @@ export const addWordPressSite = async (req: AuthRequest, res: Response) => {
 
     // Validate required fields
     if (!name || !url || !username || !applicationPassword) {
+      const missingFields = [];
+      if (!name) missingFields.push('name');
+      if (!url) missingFields.push('url');
+      if (!username) missingFields.push('username');
+      if (!applicationPassword) missingFields.push('applicationPassword');
+      
+      console.log('❌ Missing required fields:', missingFields);
       return res.status(400).json({
         success: false,
-        message: 'All fields are required'
+        message: 'All fields are required',
+        missingFields
       });
     }
 
+    // Normalize URL
+    const normalizedUrl = url.replace(/\/$/, ''); // Remove trailing slash
+    console.log('🔍 Normalized URL:', normalizedUrl);
+
     // Check if user already has this site
-    const existingSite = await WordPressSite.findOne({ userId, url });
+    const existingSite = await WordPressSite.findOne({ userId, url: normalizedUrl });
     if (existingSite) {
+      console.log('❌ Site already exists:', existingSite._id);
       return res.status(400).json({
         success: false,
         message: 'This site is already registered'
       });
     }
 
-    // Create new external site
+    // Create new site (detect type from parameters)
     const site = new WordPressSite({
       userId,
       name,
-      url: url.replace(/\/$/, ''), // Remove trailing slash
+      url: normalizedUrl,
       username,
       applicationPassword,
       isDefault: isDefault || false,
-      siteType: 'external'
+      siteType: siteType || 'external' // Use provided siteType or default to external
     });
 
-    // Test connection before saving
-    const isConnected = await site.testWordPressConnection();
-    if (!isConnected) {
-      return res.status(400).json({
-        success: false,
-        message: 'Failed to connect to WordPress site. Please check your credentials.',
-        error: site.testConnection?.error
-      });
+    // For auto-registration after installation, skip connection test temporarily
+    // and allow manual verification later
+    const skipConnectionTest = siteType === 'managed' && vpsConfig;
+    
+    if (skipConnectionTest) {
+      console.log('⚠️ Skipping connection test for managed site (auto-registration)');
+      // Set pending test status
+      site.testConnection = {
+        status: 'pending',
+        lastTest: new Date(),
+        error: null
+      };
+    } else {
+      console.log('🔄 Testing WordPress connection...');
+      // Test connection before saving
+      const isConnected = await site.testWordPressConnection();
+      console.log('🔍 Connection test result:', { isConnected, error: site.testConnection?.error });
+      
+      if (!isConnected) {
+        console.log('❌ WordPress connection failed');
+        return res.status(400).json({
+          success: false,
+          message: 'Failed to connect to WordPress site. Please check your credentials.',
+          error: site.testConnection?.error
+        });
+      }
     }
 
     await site.save();
+    console.log('✅ WordPress site saved:', site._id);
 
     // Return without password
     const siteData = site.toObject();
@@ -94,7 +137,7 @@ export const addWordPressSite = async (req: AuthRequest, res: Response) => {
       message: 'WordPress site added successfully'
     });
   } catch (error: any) {
-    console.error('Error adding WordPress site:', error);
+    console.error('❌ Error adding WordPress site:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to add WordPress site'
