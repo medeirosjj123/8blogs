@@ -562,6 +562,11 @@ export const createModule = async (req: AuthRequest, res: Response) => {
 
     const moduleData = {
       ...req.body,
+      slug: req.body.title
+        ?.toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .trim(),
       courseId,
       order,
       createdBy: req.user._id
