@@ -39,6 +39,78 @@ handle_error() {
 # Set trap for error handling
 trap 'handle_error $LINENO "$BASH_COMMAND"' ERR
 
+# Function to wait for apt/dpkg locks to be released
+wait_for_apt() {
+    print_status "🕐 Checking for running package management processes..."
+    local timeout=300  # 5 minutes timeout
+    local count=0
+    
+    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
+        if [ $count -ge $timeout ]; then
+            print_warning "⚠️  Timeout waiting for package locks, forcing unlock..."
+            force_unlock_apt
+            return 0
+        fi
+        
+        print_status "⏳ Waiting for package management to finish... ($count/$timeout seconds)"
+        sleep 5
+        count=$((count + 5))
+    done
+    
+    print_success "✅ No active package management processes detected"
+}
+
+# Function to force unlock apt/dpkg if stuck
+force_unlock_apt() {
+    print_status "🔓 Forcing unlock of package management..."
+    
+    # Kill any stuck apt/dpkg processes
+    pkill -f apt-get >/dev/null 2>&1 || true
+    pkill -f apt >/dev/null 2>&1 || true
+    pkill -f dpkg >/dev/null 2>&1 || true
+    pkill -f unattended-upgrade >/dev/null 2>&1 || true
+    
+    # Remove lock files
+    rm -f /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || true
+    rm -f /var/lib/dpkg/lock >/dev/null 2>&1 || true
+    rm -f /var/lib/apt/lists/lock >/dev/null 2>&1 || true
+    rm -f /var/cache/apt/archives/lock >/dev/null 2>&1 || true
+    
+    # Configure any interrupted dpkg
+    dpkg --configure -a >/dev/null 2>&1 || true
+    
+    print_success "✅ Package management locks cleared"
+}
+
+# Function to run apt commands with retry logic
+run_apt() {
+    local cmd="$1"
+    local max_retries=3
+    local retry=0
+    
+    while [ $retry -lt $max_retries ]; do
+        wait_for_apt
+        
+        # Set non-interactive mode and automatic yes
+        export DEBIAN_FRONTEND=noninteractive
+        
+        # Run the command with proper error handling
+        if eval "$cmd"; then
+            return 0
+        else
+            retry=$((retry + 1))
+            if [ $retry -lt $max_retries ]; then
+                print_warning "⚠️  Command failed, retrying ($retry/$max_retries)..."
+                force_unlock_apt
+                sleep 10
+            else
+                print_error "❌ Command failed after $max_retries attempts: $cmd"
+                return 1
+            fi
+        fi
+    done
+}
+
 # Get user email from parameter or prompt
 USER_EMAIL="${1:-}"
 if [ -z "$USER_EMAIL" ]; then
@@ -60,6 +132,10 @@ sleep 3
 # ============================================================================
 
 print_status "🔴 PHASE 1: Complete VPS Reset"
+
+# First, handle any existing package locks
+print_status "🔧 Preparing package management system..."
+force_unlock_apt
 
 # Stop all web services
 print_status "🛑 Stopping all web services..."
@@ -87,7 +163,7 @@ fi
 
 # Remove all web packages
 print_status "📦 Removing web packages..."
-apt-get remove --purge -y nginx* apache2* mysql* mariadb* php* 2>/dev/null || true
+run_apt "apt-get remove --purge -y nginx* apache2* mysql* mariadb* php*" || true
 
 # Clean all web directories
 print_status "🧹 Cleaning web directories..."
@@ -98,14 +174,14 @@ rm -rf /var/log/nginx /var/log/apache2 /var/log/mysql 2>/dev/null || true
 
 # Remove Docker if exists
 print_status "🐳 Removing Docker if exists..."
-apt-get remove --purge -y docker* containerd* 2>/dev/null || true
+run_apt "apt-get remove --purge -y docker* containerd*" || true
 rm -rf /var/lib/docker 2>/dev/null || true
 
 # Clean package system
 print_status "🧼 Cleaning package system..."
-apt-get autoremove -y 2>/dev/null || true
-apt-get autoclean 2>/dev/null || true
-apt-get clean 2>/dev/null || true
+run_apt "apt-get autoremove -y" || true
+run_apt "apt-get autoclean" || true
+run_apt "apt-get clean" || true
 
 print_success "✅ VPS reset completed!"
 
@@ -117,15 +193,15 @@ print_status "🔄 PHASE 2: System Update & Dependencies"
 
 # Update package lists
 print_status "📋 Updating package lists..."
-apt-get update
+run_apt "apt-get update"
 
 # Upgrade system
 print_status "⬆️  Upgrading system packages (this may take a few minutes)..."
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+run_apt "DEBIAN_FRONTEND=noninteractive apt-get upgrade -y"
 
 # Install essential dependencies
 print_status "🔧 Installing essential dependencies..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
+run_apt "DEBIAN_FRONTEND=noninteractive apt-get install -y \
     curl \
     wget \
     git \
@@ -135,7 +211,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     gnupg \
     lsb-release \
     unzip \
-    zip
+    zip"
 
 print_success "✅ System updated and dependencies installed!"
 
@@ -147,7 +223,7 @@ print_status "🛡️  PHASE 3: Security Setup"
 
 # Install fail2ban
 print_status "🔒 Installing fail2ban..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban
+run_apt "DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban"
 
 # Configure fail2ban
 print_status "⚙️  Configuring fail2ban..."
