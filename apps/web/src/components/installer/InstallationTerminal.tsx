@@ -13,6 +13,13 @@ import {
   WifiOff
 } from 'lucide-react';
 
+// Development-only logging helper
+const debugLog = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
+
 interface InstallationTerminalProps {
   domain: string;
   templateName: string;
@@ -71,6 +78,7 @@ export const InstallationTerminal: React.FC<InstallationTerminalProps> = ({
 
   const [steps, setSteps] = useState<InstallationStep[]>([
     { id: 'connect', name: 'Conectando ao VPS', status: 'pending' },
+    { id: 'vps_cleanup', name: 'Limpando VPS', status: 'pending' },
     { id: 'system_update', name: 'Atualizando Sistema', status: 'pending' },
     { id: 'dependencies', name: 'Instalando Dependências', status: 'pending' },
     { id: 'wordops', name: 'Instalando WordOps', status: 'pending' },
@@ -82,8 +90,8 @@ export const InstallationTerminal: React.FC<InstallationTerminalProps> = ({
   ]);
 
   useEffect(() => {
-    console.log('🎬 InstallationTerminal: Component mounted with installationId:', installationId);
-    console.log('🔧 DEBUG: Frontend completion fix v2 - with enhanced logging');
+    debugLog('🎬 InstallationTerminal: Component mounted with installationId:', installationId);
+    debugLog('🔧 DEBUG: Frontend completion fix v2 - with enhanced logging');
     
     // Show immediate feedback that installation is starting
     addOutput('🚀 Iniciando instalação do WordPress...');

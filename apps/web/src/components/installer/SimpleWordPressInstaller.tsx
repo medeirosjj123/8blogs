@@ -20,12 +20,20 @@ import {
   ExternalLink,
   User,
   Palette,
-  Plug
+  Plug,
+  Server
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { InstallationStep } from '../../types/installer';
 import { UpgradePrompt } from '../UpgradePrompt';
 import { useUsage } from '../../hooks/useUsage';
+
+// Development-only logging helper
+const debugLog = (...args: any[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args);
+  }
+};
 
 interface SimpleWordPressInstallerProps {
   onClose: () => void;
@@ -114,13 +122,13 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
   ];
 
   const handleNext = () => {
-    console.log('📍 handleNext called - current step:', currentStep, 'steps length:', steps.length);
+    debugLog('📍 handleNext called - current step:', currentStep, 'steps length:', steps.length);
     if (currentStep < steps.length - 1) {
       const nextStep = currentStep + 1;
-      console.log('📍 Moving to step:', nextStep);
+      debugLog('📍 Moving to step:', nextStep);
       setCurrentStep(nextStep);
     } else {
-      console.log('📍 Already at last step, not advancing');
+      debugLog('📍 Already at last step, not advancing');
     }
   };
 
@@ -130,8 +138,9 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
     }
   };
 
+
   const handleCredentialsComplete = (credentials: WordPressCredentials) => {
-    console.log('🔐 User completed credentials step:', {
+    debugLog('🔐 User completed credentials step:', {
       adminUsername: credentials.adminUsername,
       adminEmail: credentials.adminEmail,
       siteTitle: credentials.siteTitle,
@@ -147,14 +156,14 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
   };
 
   const handlePluginsSelected = (plugins: string[]) => {
-    console.log('handlePluginsSelected called with plugins:', plugins);
+    debugLog('handlePluginsSelected called with plugins:', plugins);
     setSelectedPlugins(plugins);
     handleNext();
   };
 
   // Debug log to verify function exists
   React.useEffect(() => {
-    console.log('SimpleWordPressInstaller handlePluginsSelected defined:', typeof handlePluginsSelected);
+    debugLog('SimpleWordPressInstaller handlePluginsSelected defined:', typeof handlePluginsSelected);
   }, []);
 
   const handleConfigComplete = async (config: InstallationConfigData) => {
@@ -171,7 +180,8 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
           username: config.vpsUsername,
           password: config.vpsPassword,
           privateKey: config.vpsPrivateKey,
-          authMethod: config.authMethod
+          authMethod: config.authMethod,
+          installationType: config.installationType
         },
         wordpressConfig: {
           credentials: wpCredentials,
@@ -195,10 +205,10 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
   };
 
   const handleInstallationComplete = React.useCallback(async (success: boolean, data?: any) => {
-    console.log('🎉 Installation completion callback:', { success, data });
-    console.log('🔍 Current step before completion:', currentStep);
-    console.log('🔍 Installation success state before:', installationSuccess);
-    console.log('🔍 WordPress credentials from state:', wpCredentials);
+    debugLog('🎉 Installation completion callback:', { success, data });
+    debugLog('🔍 Current step before completion:', currentStep);
+    debugLog('🔍 Installation success state before:', installationSuccess);
+    debugLog('🔍 WordPress credentials from state:', wpCredentials);
     
     if (success) {
       // Create proper completion data with actual credentials and URLs
@@ -209,9 +219,9 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
       const finalUsername = data?.credentials?.username || wpCredentials?.username || 'admin';
       const finalPassword = data?.credentials?.password || wpCredentials?.password || 'admin123';
       
-      console.log('🔍 Final credentials being used:');
-      console.log('  - Username:', finalUsername, '(from:', data?.credentials?.username ? 'data' : wpCredentials?.username ? 'wpCredentials' : 'fallback', ')');
-      console.log('  - Password:', finalPassword, '(from:', data?.credentials?.password ? 'data' : wpCredentials?.password ? 'wpCredentials' : 'fallback', ')');
+      debugLog('🔍 Final credentials being used:');
+      debugLog('  - Username:', finalUsername, '(from:', data?.credentials?.username ? 'data' : wpCredentials?.username ? 'wpCredentials' : 'fallback', ')');
+      debugLog('  - Password:', finalPassword, '(from:', data?.credentials?.password ? 'data' : wpCredentials?.password ? 'wpCredentials' : 'fallback', ')');
       
       const completionData = {
         credentials: {
@@ -245,13 +255,13 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
         }
       };
       
-      console.log('✅ Setting installation success data:', completionData);
+      debugLog('✅ Setting installation success data:', completionData);
       setInstallationSuccess(completionData);
-      console.log('📍 Installation complete - waiting for user to continue');
+      debugLog('📍 Installation complete - waiting for user to continue');
       
       // Auto-register the new site in the database
       try {
-        console.log('🔄 Auto-registering site in database...');
+        debugLog('🔄 Auto-registering site in database...');
         const registerResponse = await api.post('/api/wordpress/sites', {
           name: wpCredentials?.siteTitle || domain || 'Novo Site',
           url: siteUrl,
@@ -267,7 +277,7 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
         });
         
         if (registerResponse.data.success) {
-          console.log('✅ Site registered successfully in database');
+          debugLog('✅ Site registered successfully in database');
         } else {
           console.warn('⚠️ Site registration failed:', registerResponse.data.message);
           // If it's a blog limit error, show upgrade prompt
@@ -426,47 +436,26 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
           <InstallationConfig
             templateId="raw-wordpress"
             templateName="WordPress"
+            installationType="add-site"
             onConfigComplete={handleConfigComplete}
           />
         )}
 
         {currentStep === 4 && (
-          installationSuccess ? (
-            <div className="text-center py-8">
-              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle className="w-12 h-12 text-green-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">✅ WordPress Instalado com Sucesso!</h3>
-              <p className="text-gray-600 mb-6 text-lg">Sua instalação foi concluída. Clique abaixo para ver os detalhes e credenciais de acesso.</p>
-              <button 
-                onClick={() => {
-                  console.log('🔧 User clicked to view results - moving to step 5');
-                  setCurrentStep(5);
-                }}
-                className="px-8 py-4 bg-coral text-white rounded-2xl hover:bg-coral-dark font-bold text-lg transition-colors shadow-lg"
-              >
-                Ver Detalhes e Credenciais
-              </button>
-            </div>
-          ) : installationId && installationConfig ? (
-            <InstallationTerminal
-              key={`terminal-${currentStep}-${installationId}`}
-              domain={installationConfig.domain}
-              templateName="WordPress"
-              installationId={installationId}
-              wpCredentials={wpCredentials}
-              onComplete={handleInstallationComplete}
-              onBack={handlePrevious}
-            />
-          ) : (
-            <div className="text-center text-gray-500">
-              Preparing installation...
-            </div>
-          )
+          <InstallationTerminal
+            domain={installationConfig?.domain || ''}
+            templateName="WordPress"
+            installationId={installationId}
+            wpCredentials={wpCredentials}
+            onComplete={handleInstallationComplete}
+            onBack={handlePrevious}
+          />
         )}
+      </div>
 
-        {currentStep === 5 && (
-          installationSuccess ? (
+
+      {/* Step 6: Final Results */}
+      {currentStep === 6 && installationSuccess && (
             <div className="max-w-4xl mx-auto">
             <div className="mb-8 text-center">
               <Globe className="w-16 h-16 text-green-500 mx-auto mb-4" />
@@ -728,41 +717,40 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
               </ul>
             </div>
           </div>
-          ) : (
-            <div className="max-w-4xl mx-auto">
-              <div className="flex items-center justify-center h-64">
-                <div className="text-center">
-                  <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Preparando página de sucesso...</h3>
-                  <p className="text-gray-600">Carregando dados da instalação concluída...</p>
-                </div>
-              </div>
-            </div>
-          )
-        )}
+      )}
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="w-16 h-16 border-4 border-coral border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-gray-600">Iniciando instalação no VPS...</p>
-            </div>
+      {/* Step 6: Loading State */}
+      {currentStep === 6 && !installationSuccess && (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Preparando página de sucesso...</h3>
+            <p className="text-gray-600">Carregando dados da instalação concluída...</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* General Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-coral border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-gray-600">Iniciando instalação no VPS...</p>
+          </div>
+        </div>
+      )}
 
       {/* Navigation */}
-      {currentStep === 5 && (
+      {currentStep === 6 && (
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
           <div className="flex justify-center">
             <button
               onClick={() => {
-                console.log('🔴 CONCLUIR BUTTON CLICKED');
-                console.log('🔍 Current state when closing:');
-                console.log('  - currentStep:', currentStep);
-                console.log('  - installationSuccess:', !!installationSuccess);
-                console.log('  - installationSuccess data:', installationSuccess);
+                debugLog('🔴 CONCLUIR BUTTON CLICKED');
+                debugLog('🔍 Current state when closing:');
+                debugLog('  - currentStep:', currentStep);
+                debugLog('  - installationSuccess:', !!installationSuccess);
+                debugLog('  - installationSuccess data:', installationSuccess);
                 
                 // Show success toast before closing
                 toast.success('WordPress instalado com sucesso! Você pode acessar sua ferramenta quando quiser.', {
@@ -771,7 +759,7 @@ export const SimpleWordPressInstaller: React.FC<SimpleWordPressInstallerProps> =
                 });
                 
                 // Close modal immediately when user clicks (no auto-timer)
-                console.log('🔴 Closing modal - returning to Tools page');
+                debugLog('🔴 Closing modal - returning to Tools page');
                 onClose();
               }}
               className="px-6 py-2 bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors font-semibold"

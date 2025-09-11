@@ -17,10 +17,12 @@ import {
 interface InstallationConfigProps {
   templateId: string;
   templateName: string;
+  installationType: 'fresh' | 'add-site';
   onConfigComplete: (config: InstallationConfigData) => void;
 }
 
 export interface InstallationConfigData {
+  installationType: 'fresh' | 'add-site';
   domain: string;
   vpsHost: string;
   vpsPort: number;
@@ -28,11 +30,14 @@ export interface InstallationConfigData {
   vpsPassword?: string;
   vpsPrivateKey?: string;
   authMethod: 'password' | 'privateKey';
+  confirmReset?: boolean;
+  resetConfirmText?: string;
 }
 
 export const InstallationConfig: React.FC<InstallationConfigProps> = ({
   templateId,
   templateName,
+  installationType,
   onConfigComplete
 }) => {
   const [domain, setDomain] = useState('');
@@ -178,6 +183,7 @@ export const InstallationConfig: React.FC<InstallationConfigProps> = ({
     }
 
     onConfigComplete({
+      installationType: installationType,
       domain: cleanDomain,
       vpsHost,
       vpsPort,
@@ -192,9 +198,14 @@ export const InstallationConfig: React.FC<InstallationConfigProps> = ({
     <div className="space-y-6">
       {/* Template Info */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <p className="text-sm text-blue-900">
-          <span className="font-semibold">Template selecionado:</span> {templateName}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm text-blue-900">
+            <span className="font-semibold">Template:</span> {templateName}
+          </p>
+          <span className="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded">
+            {installationType === 'fresh' ? 'Instalação Completa' : 'Adicionar Site'}
+          </span>
+        </div>
       </div>
 
       {/* Domain Configuration */}
@@ -466,7 +477,7 @@ export const InstallationConfig: React.FC<InstallationConfigProps> = ({
         className="w-full py-3 px-4 bg-coral text-white rounded-lg font-medium hover:bg-coral-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         <Server className="w-5 h-5" />
-        Instalar no VPS
+        {installationType === 'fresh' ? 'Instalar WordPress (Reset VPS)' : 'Adicionar Site WordPress'}
       </button>
     </div>
   );

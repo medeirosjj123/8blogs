@@ -23,7 +23,8 @@ import {
   Edit,
   Copy,
   Terminal,
-  Rocket
+  Rocket,
+  Loader2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
@@ -33,6 +34,8 @@ import { AddExistingSiteModal } from '../components/modals/AddExistingSiteModal'
 import { SimpleWordPressInstaller } from '../components/installer/SimpleWordPressInstaller';
 import { UpgradePrompt } from '../components/UpgradePrompt';
 import { useUsage } from '../hooks/useUsage';
+import { VPSSetupButton } from '../components/vps/VPSSetupButton';
+import vpsService from '../services/vpsService';
 
 export default function WordPressSites() {
   const [sites, setSites] = useState<WordPressSite[]>([]);
@@ -42,6 +45,8 @@ export default function WordPressSites() {
   const [showCredentials, setShowCredentials] = useState<Record<string, boolean>>({});
   const [showAddModal, setShowAddModal] = useState(false);
   const [showInstaller, setShowInstaller] = useState(false);
+  const [hasConfiguredVPS, setHasConfiguredVPS] = useState(false);
+  const [checkingVPS, setCheckingVPS] = useState(true);
   
   // Usage hook for limit checking
   const { 
@@ -55,7 +60,19 @@ export default function WordPressSites() {
 
   useEffect(() => {
     fetchSites();
+    checkVPSStatus();
   }, []);
+
+  const checkVPSStatus = async () => {
+    try {
+      const hasVPS = await vpsService.hasConfiguredVPS();
+      setHasConfiguredVPS(hasVPS);
+    } catch (error) {
+      console.error('Error checking VPS status:', error);
+    } finally {
+      setCheckingVPS(false);
+    }
+  };
 
   const fetchSites = async () => {
     try {
@@ -139,11 +156,20 @@ export default function WordPressSites() {
     setShowAddModal(true);
   };
 
-  const handleCreateNewSite = () => {
+  const handleCreateNewSite = async () => {
     if (!canAddBlog()) {
       showUpgradePromptFor('blogs');
       return;
     }
+    
+    // Check if VPS is configured
+    if (!hasConfiguredVPS) {
+      toast.error('Você precisa configurar um VPS primeiro antes de criar um blog!', {
+        duration: 4000
+      });
+      return;
+    }
+    
     setShowInstaller(true);
   };
 
@@ -227,6 +253,16 @@ export default function WordPressSites() {
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             Atualizar
           </button>
+          
+          {/* VPS Setup Button */}
+          <VPSSetupButton 
+            className="flex items-center gap-2 px-4 py-2"
+            variant="secondary"
+          >
+            <Server className="w-4 h-4" />
+            Configurar VPS
+          </VPSSetupButton>
+          
           <button
             onClick={handleAddExistingSite}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -234,12 +270,22 @@ export default function WordPressSites() {
             <Plus className="w-4 h-4" />
             Adicionar Blog Existente
           </button>
+          
           <button
             onClick={handleCreateNewSite}
-            className="flex items-center gap-2 px-4 py-2 bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
+            disabled={checkingVPS}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+              hasConfiguredVPS 
+                ? 'bg-coral text-white hover:bg-coral-dark' 
+                : 'bg-gray-400 text-white cursor-not-allowed'
+            }`}
+            title={!hasConfiguredVPS ? 'Configure um VPS primeiro' : ''}
           >
             <Rocket className="w-4 h-4" />
             Criar Novo Blog
+            {!hasConfiguredVPS && !checkingVPS && (
+              <AlertCircle className="w-4 h-4 text-amber-300" />
+            )}
           </button>
         </div>
       </div>
@@ -252,20 +298,42 @@ export default function WordPressSites() {
             Adicione um site existente ou crie um novo para começar
           </p>
           <div className="flex justify-center gap-4">
-            <button
-              onClick={handleAddExistingSite}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Adicionar Blog Existente
-            </button>
-            <button
-              onClick={handleCreateNewSite}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
-            >
-              <Rocket className="w-5 h-5" />
-              Criar Novo Blog
-            </button>
+            {!hasConfiguredVPS && !checkingVPS && (
+              <VPSSetupButton 
+                className="inline-flex items-center gap-2 px-6 py-3"
+                size="lg"
+                variant="primary"
+              >
+                <Server className="w-5 h-5" />
+                Configurar VPS Primeiro
+              </VPSSetupButton>
+            )}
+            
+            {hasConfiguredVPS && (
+              <>
+                <button
+                  onClick={handleAddExistingSite}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                  Adicionar Blog Existente
+                </button>
+                <button
+                  onClick={handleCreateNewSite}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
+                >
+                  <Rocket className="w-5 h-5" />
+                  Criar Novo Blog
+                </button>
+              </>
+            )}
+            
+            {checkingVPS && (
+              <div className="inline-flex items-center gap-2 px-6 py-3 bg-gray-200 text-gray-600 rounded-lg">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Verificando VPS...
+              </div>
+            )}
           </div>
         </div>
       ) : (
