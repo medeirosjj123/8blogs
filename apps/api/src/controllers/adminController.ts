@@ -589,6 +589,37 @@ export const createModule = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// One-time migration: Set all existing content as published
+export const publishAllContent = async (req: AuthRequest, res: Response) => {
+  try {
+    // Update ALL modules to be published (not just unpublished ones)
+    const moduleResult = await Module.updateMany(
+      {},
+      { $set: { isPublished: true } }
+    );
+
+    // Update ALL lessons to be published (not just unpublished ones)
+    const lessonResult = await Lesson.updateMany(
+      {},
+      { $set: { isPublished: true } }
+    );
+
+    console.log(`Migration: Published ${moduleResult.modifiedCount} modules and ${lessonResult.modifiedCount} lessons`);
+
+    res.json({
+      success: true,
+      data: {
+        modulesUpdated: moduleResult.modifiedCount,
+        lessonsUpdated: lessonResult.modifiedCount,
+        message: 'All existing content set as published'
+      }
+    });
+  } catch (error) {
+    console.error('Error in migration:', error);
+    res.status(500).json({ success: false, message: 'Migration failed' });
+  }
+};
+
 export const updateModule = async (req: AuthRequest, res: Response) => {
   try {
     const { moduleId } = req.params;

@@ -35,6 +35,8 @@ import { SimpleWordPressInstaller } from '../components/installer/SimpleWordPres
 import { UpgradePrompt } from '../components/UpgradePrompt';
 import { useUsage } from '../hooks/useUsage';
 import { VPSSetupButton } from '../components/vps/VPSSetupButton';
+import { SimpleVpsConfigModal } from '../components/vps/SimpleVpsConfigModal';
+import { SimpleBlogCreatorModal } from '../components/blog/SimpleBlogCreatorModal';
 import vpsService from '../services/vpsService';
 
 export default function WordPressSites() {
@@ -45,6 +47,8 @@ export default function WordPressSites() {
   const [showCredentials, setShowCredentials] = useState<Record<string, boolean>>({});
   const [showAddModal, setShowAddModal] = useState(false);
   const [showInstaller, setShowInstaller] = useState(false);
+  const [showSimpleVpsConfig, setShowSimpleVpsConfig] = useState(false);
+  const [showSimpleBlogCreator, setShowSimpleBlogCreator] = useState(false);
   const [hasConfiguredVPS, setHasConfiguredVPS] = useState(false);
   const [checkingVPS, setCheckingVPS] = useState(true);
   
@@ -127,7 +131,7 @@ export default function WordPressSites() {
   };
 
   const deleteSite = async (siteId: string, siteName: string) => {
-    if (!confirm(`Tem certeza que deseja remover o site "${siteName}"? Esta ação não pode ser desfeita.`)) {
+    if (!confirm(`⚠️ Remover "${siteName}"?\n\nIsto apenas remove o site da sua lista no Tatame.\nO site continuará funcionando normalmente.\n\nDeseja continuar?`)) {
       return;
     }
 
@@ -162,15 +166,7 @@ export default function WordPressSites() {
       return;
     }
     
-    // Check if VPS is configured
-    if (!hasConfiguredVPS) {
-      toast.error('Você precisa configurar um VPS primeiro antes de criar um blog!', {
-        duration: 4000
-      });
-      return;
-    }
-    
-    setShowInstaller(true);
+    setShowSimpleBlogCreator(true);
   };
 
   const toggleCredentials = (siteId: string) => {
@@ -241,8 +237,8 @@ export default function WordPressSites() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Meus Sites WordPress</h1>
-          <p className="text-gray-600">Gerencie todos os seus sites WordPress em um só lugar</p>
+          <h1 className="text-2xl font-bold text-gray-900">Meus Sites</h1>
+          <p className="text-gray-600">Gerencie todos os seus sites e blogs em um só lugar</p>
         </div>
         <div className="flex gap-3">
           <button
@@ -254,38 +250,31 @@ export default function WordPressSites() {
             Atualizar
           </button>
           
-          {/* VPS Setup Button */}
-          <VPSSetupButton 
-            className="flex items-center gap-2 px-4 py-2"
-            variant="secondary"
+          {/* Simple VPS Config Button */}
+          <button
+            onClick={() => setShowSimpleVpsConfig(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
           >
             <Server className="w-4 h-4" />
-            Configurar VPS
-          </VPSSetupButton>
+            Configurar Servidor
+          </button>
           
           <button
             onClick={handleAddExistingSite}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            title="Conectar um site WordPress que já existe"
           >
             <Plus className="w-4 h-4" />
-            Adicionar Blog Existente
+            Conectar Site Existente
           </button>
           
           <button
             onClick={handleCreateNewSite}
-            disabled={checkingVPS}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-              hasConfiguredVPS 
-                ? 'bg-coral text-white hover:bg-coral-dark' 
-                : 'bg-gray-400 text-white cursor-not-allowed'
-            }`}
-            title={!hasConfiguredVPS ? 'Configure um VPS primeiro' : ''}
+            className="flex items-center gap-2 px-4 py-2 bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
+            title="Criar um novo blog WordPress"
           >
             <Rocket className="w-4 h-4" />
             Criar Novo Blog
-            {!hasConfiguredVPS && !checkingVPS && (
-              <AlertCircle className="w-4 h-4 text-amber-300" />
-            )}
           </button>
         </div>
       </div>
@@ -295,7 +284,7 @@ export default function WordPressSites() {
           <Globe className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum site encontrado</h3>
           <p className="text-gray-600 mb-6">
-            Adicione um site existente ou crie um novo para começar
+            Conecte um site existente ou crie um novo para começar
           </p>
           <div className="flex justify-center gap-4">
             {!hasConfiguredVPS && !checkingVPS && (
@@ -305,7 +294,7 @@ export default function WordPressSites() {
                 variant="primary"
               >
                 <Server className="w-5 h-5" />
-                Configurar VPS Primeiro
+                Configurar Servidor Primeiro
               </VPSSetupButton>
             )}
             
@@ -316,14 +305,14 @@ export default function WordPressSites() {
                   className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <Plus className="w-5 h-5" />
-                  Adicionar Blog Existente
+                  Conectar Site Existente
                 </button>
                 <button
                   onClick={handleCreateNewSite}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-coral text-white rounded-lg hover:bg-coral-dark transition-colors"
                 >
                   <Rocket className="w-5 h-5" />
-                  Criar Novo Blog
+                  Criar Novo Site
                 </button>
               </>
             )}
@@ -331,7 +320,7 @@ export default function WordPressSites() {
             {checkingVPS && (
               <div className="inline-flex items-center gap-2 px-6 py-3 bg-gray-200 text-gray-600 rounded-lg">
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Verificando VPS...
+                Verificando servidor...
               </div>
             )}
           </div>
@@ -350,7 +339,7 @@ export default function WordPressSites() {
                     </h3>
                     {site.siteType === 'managed' && (
                       <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-xs font-semibold rounded-full">
-                        VPS
+                        Servidor
                       </span>
                     )}
                   </div>
@@ -384,7 +373,7 @@ export default function WordPressSites() {
                     <div className="text-2xl font-bold text-blue-600">
                       {site.testConnection?.status === 'connected' ? '✓' : site.testConnection?.status === 'failed' ? '✗' : '?'}
                     </div>
-                    <div className="text-xs text-gray-600">WordPress API</div>
+                    <div className="text-xs text-gray-600">Conexão</div>
                   </div>
                 </div>
               </div>
@@ -452,7 +441,7 @@ export default function WordPressSites() {
                           ••••••••••••
                         </code>
                         <span className="text-xs text-gray-500">
-                          (Application Password)
+                          (Senha de Acesso)
                         </span>
                       </div>
                     </div>
@@ -479,7 +468,7 @@ export default function WordPressSites() {
                     className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
                   >
                     <Settings className="w-4 h-4" />
-                    Admin
+                    Painel
                   </a>
                 </div>
 
@@ -487,6 +476,7 @@ export default function WordPressSites() {
                   <button
                     onClick={() => createBackup(site._id)}
                     className="flex items-center justify-center gap-1 px-2 py-2 text-xs bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors"
+                    title="Criar cópia de segurança do seu site"
                   >
                     <Download className="w-3 h-3" />
                     Backup
@@ -495,23 +485,26 @@ export default function WordPressSites() {
                     onClick={() => refreshSiteStatus(site._id)}
                     disabled={refreshing}
                     className="flex items-center justify-center gap-1 px-2 py-2 text-xs bg-yellow-50 text-yellow-600 rounded-lg hover:bg-yellow-100 transition-colors disabled:opacity-50"
+                    title="Verificar se o site está funcionando"
                   >
                     <RefreshCw className="w-3 h-3" />
-                    Refresh
+                    Status
                   </button>
                   <button
                     onClick={() => setSelectedSite(site)}
                     className="flex items-center justify-center gap-1 px-2 py-2 text-xs bg-coral-50 text-coral rounded-lg hover:bg-coral-100 transition-colors"
+                    title="Configurações avançadas do site"
                   >
-                    <Terminal className="w-3 h-3" />
-                    Manage
+                    <Settings className="w-3 h-3" />
+                    Config
                   </button>
                   <button
                     onClick={() => deleteSite(site._id, site.name)}
                     className="flex items-center justify-center gap-1 px-2 py-2 text-xs bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                    title="Remover site da lista (não exclui o site)"
                   >
                     <Trash2 className="w-3 h-3" />
-                    Delete
+                    Remover
                   </button>
                 </div>
               </div>
@@ -570,7 +563,7 @@ export default function WordPressSites() {
                     <div className="flex justify-between">
                       <span className="text-gray-600">Tipo:</span>
                       <span className="font-medium">
-                        {selectedSite.siteType === 'managed' ? 'VPS Gerenciado' : 'Site Externo'}
+                        {selectedSite.siteType === 'managed' ? 'Servidor Próprio' : 'Site Externo'}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -679,7 +672,7 @@ export default function WordPressSites() {
                   className="flex items-center gap-2 px-4 py-2 bg-coral-50 text-coral rounded-lg hover:bg-coral-100 transition-colors"
                 >
                   <ExternalLink className="w-4 h-4" />
-                  Abrir Admin
+                  Abrir Painel
                 </a>
               </div>
             </div>
@@ -722,6 +715,25 @@ export default function WordPressSites() {
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSiteAdded={fetchSites}
+      />
+
+      {/* Simple VPS Config Modal */}
+      <SimpleVpsConfigModal
+        isOpen={showSimpleVpsConfig}
+        onClose={() => setShowSimpleVpsConfig(false)}
+        onSuccess={() => {
+          setHasConfiguredVPS(true);
+          fetchSites();
+        }}
+      />
+
+      {/* Simple Blog Creator Modal */}
+      <SimpleBlogCreatorModal
+        isOpen={showSimpleBlogCreator}
+        onClose={() => setShowSimpleBlogCreator(false)}
+        onSuccess={() => {
+          fetchSites();
+        }}
       />
 
       {/* Upgrade Prompt */}

@@ -21,27 +21,33 @@ const logger = pino({
 export async function getCourses(req: Request, res: Response): Promise<void> {
   try {
     const courses = await Course.find({ isPublished: true })
+      .populate('modules')
       .sort({ order: 1, createdAt: -1 });
     
-    // Simple response for now
-    const coursesData = courses.map(course => ({
-      id: course._id,
-      title: course.title,
-      slug: course.slug,
-      description: course.description,
-      thumbnail: course.thumbnail,
-      instructor: course.instructor,
-      level: course.level,
-      duration: course.duration,
-      tags: course.tags,
-      moduleCount: 3,
-      totalLessons: 12,
-      completedLessons: 0,
-      progress: 0,
-      belt: course.level === 'advanced' ? 'roxa' : course.level === 'intermediate' ? 'azul' : 'branca',
-      isLocked: false,
-      students: Math.floor(Math.random() * 500) + 100,
-      currentLesson: null
+    // Map courses with real module data
+    const coursesData = await Promise.all(courses.map(async (course) => {
+      const modules = await Module.find({ courseId: course._id }).populate('lessons');
+      const totalLessons = modules.reduce((sum, module) => sum + module.lessons.length, 0);
+      
+      return {
+        id: course._id,
+        title: course.title,
+        slug: course.slug,
+        description: course.description,
+        thumbnail: course.thumbnail,
+        instructor: course.instructor,
+        level: course.level,
+        duration: course.duration,
+        tags: course.tags,
+        moduleCount: modules.length,
+        totalLessons,
+        completedLessons: 0,
+        progress: 0,
+        belt: course.level === 'advanced' ? 'roxa' : course.level === 'intermediate' ? 'azul' : 'branca',
+        isLocked: false,
+        students: Math.floor(Math.random() * 500) + 100,
+        currentLesson: null
+      };
     }));
     
     res.json({

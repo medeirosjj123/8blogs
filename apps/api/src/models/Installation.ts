@@ -280,6 +280,28 @@ installationSchema.index({ userId: 1, status: 1 });
 installationSchema.index({ installToken: 1 });
 installationSchema.index({ createdAt: -1 });
 
+// Debounced save method to prevent parallel save errors
+installationSchema.methods.debouncedSave = function() {
+  // Clear any existing timeout
+  if (this._saveTimeout) {
+    clearTimeout(this._saveTimeout);
+  }
+  
+  // Set a new timeout to save after a short delay
+  return new Promise((resolve) => {
+    this._saveTimeout = setTimeout(async () => {
+      try {
+        await this.save();
+        resolve(this);
+      } catch (error: any) {
+        console.error(`Failed to save installation ${this._id}:`, error.message);
+        // Still resolve to prevent breaking the flow
+        resolve(this);
+      }
+    }, 100); // 100ms delay
+  });
+};
+
 installationSchema.methods.addLog = function(level: string, message: string, step?: string) {
   this.logs.push({
     timestamp: new Date(),
@@ -287,12 +309,8 @@ installationSchema.methods.addLog = function(level: string, message: string, ste
     message,
     step
   });
-  // Use save with options to handle validation errors
-  return this.save().catch(error => {
-    console.error(`Failed to save log for installation ${this._id}:`, error.message);
-    // Return resolved promise to prevent breaking the flow
-    return Promise.resolve();
-  });
+  // Debounce saves to prevent parallel save errors
+  return this.debouncedSave();
 };
 
 installationSchema.methods.updateStep = function(stepId: string, status: string, progress?: number, message?: string) {
@@ -323,12 +341,8 @@ installationSchema.methods.updateStep = function(stepId: string, status: string,
   }
   
   this.currentStep = stepId;
-  // Use save with error handling to prevent breaking the flow
-  return this.save().catch(error => {
-    console.error(`Failed to update step ${stepId} for installation ${this._id}:`, error.message);
-    // Return resolved promise to prevent breaking the flow
-    return Promise.resolve();
-  });
+  // Debounce saves to prevent parallel save errors
+  return this.debouncedSave();
 };
 
 installationSchema.methods.markCompleted = function(siteUrl?: string) {
@@ -336,14 +350,14 @@ installationSchema.methods.markCompleted = function(siteUrl?: string) {
   this.progress = 100;
   this.completedAt = new Date();
   if (siteUrl) this.siteUrl = siteUrl;
-  return this.save();
+  return this.debouncedSave();
 };
 
 installationSchema.methods.markFailed = function(reason: string) {
   this.status = 'failed';
   this.failureReason = reason;
   this.completedAt = new Date();
-  return this.save();
+  return this.debouncedSave();
 };
 
 export const Installation = mongoose.model<IInstallationDocument>('Installation', installationSchema);

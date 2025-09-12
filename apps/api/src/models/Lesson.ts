@@ -111,7 +111,7 @@ const lessonSchema = new Schema<ILessonDocument>({
   },
   isPublished: {
     type: Boolean,
-    default: false
+    default: true
   },
   isFree: {
     type: Boolean,

@@ -20,7 +20,8 @@ import {
   getLessons,
   createLesson,
   updateLesson,
-  deleteLesson
+  deleteLesson,
+  publishAllContent
 } from '../controllers/adminController';
 import {
   getAllPrompts,
@@ -72,6 +73,9 @@ router.get('/modules/:moduleId/lessons', getLessons);
 router.post('/modules/:moduleId/lessons', createLesson);
 router.put('/lessons/:lessonId', updateLesson);
 router.delete('/lessons/:lessonId', deleteLesson);
+
+// Migration/Utilities
+router.post('/publish-all-content', publishAllContent);
 
 // Webhook Management
 router.use('/', webhookRoutes);

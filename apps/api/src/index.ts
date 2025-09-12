@@ -45,6 +45,9 @@ import wordpressPluginRoutes from './routes/wordpressPluginRoutes';
 import wordpressSiteRoutes from './routes/wordpressSiteRoutes';
 import debugRoutes from './routes/debugRoutes';
 import callRoutes from './routes/call.routes';
+import vpsRoutes from './routes/vpsRoutes';
+import siteCreationRoutes from './routes/siteCreationRoutes';
+import blogRoutes from './routes/blogRoutes';
 import { initializeSocketIO } from './socket';
 import { siteInstallationWorker } from './queues/siteInstallationQueue';
 // Import reviewQueueService conditionally during startup to avoid Redis connection issues
@@ -1048,6 +1051,18 @@ app.use('/api/admin/email-templates', emailTemplateRoutes); // Email template ro
 app.use('/api/admin/templates', adminTemplateRoutes); // WordPress template routes
 app.use('/api/calls', callRoutes); // Weekly calls management routes
 app.use('/api/debug', debugRoutes); // Debug and troubleshooting endpoints
+
+// Add WebSocket instance to request for VPS routes
+app.use('/api/vps', (req: any, _res: any, next: any) => {
+  req.io = global.socketIO;
+  next();
+});
+app.use('/api/vps', vpsRoutes); // VPS management routes
+app.use('/api/sites/managed', siteCreationRoutes); // Managed site creation routes
+app.use('/api/blog', (req: any, _res: any, next: any) => {
+  req.io = global.socketIO;
+  next();
+}, blogRoutes); // Simple blog creation routes
 
 // Static files for uploads (in production, use CDN)
 app.use('/uploads', express.static('uploads'));

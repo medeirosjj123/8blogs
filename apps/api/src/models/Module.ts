@@ -48,7 +48,7 @@ const moduleSchema = new Schema<IModuleDocument>({
   },
   isPublished: {
     type: Boolean,
-    default: false
+    default: true
   },
   metadata: {
     type: Schema.Types.Mixed,

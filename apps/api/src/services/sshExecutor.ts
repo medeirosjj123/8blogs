@@ -101,24 +101,9 @@ export class SSHExecutor extends EventEmitter {
 
   private async execCommand(command: string): Promise<any> {
     try {
-      // Log command being executed (for debugging)
-      this.emit('output', `🔧 Executing: ${command}`);
-      
       const result = await this.ssh.execCommand(command);
-      
-      // Log command result details
-      this.emit('output', `✅ Command completed with exit code: ${result.code}`);
-      if (result.stdout && result.stdout.trim()) {
-        this.emit('output', `📤 STDOUT: ${result.stdout.trim()}`);
-      }
-      if (result.stderr && result.stderr.trim()) {
-        this.emit('output', `📤 STDERR: ${result.stderr.trim()}`);
-      }
-      
       return result;
     } catch (error) {
-      this.emit('output', `❌ Command execution failed: ${command}`);
-      this.emit('output', `❌ Error details: ${error.message}`);
       this.emit('error', `Command: ${command}\nError: ${error.message}`);
       throw error;
     }
@@ -222,7 +207,7 @@ export class SSHExecutor extends EventEmitter {
     
     // Use custom WordPress credentials if provided, otherwise defaults
     const wpUser = wordpressConfig?.credentials?.adminUsername || 'admin';
-    const wpPass = wordpressConfig?.credentials?.adminPassword || 'admin123';
+    const wpPass = wordpressConfig?.credentials?.adminPassword || 'bloghouse123';
     const wpEmail = wordpressConfig?.credentials?.adminEmail || userEmail;
     
     // Escape password for bash to handle special characters safely
@@ -328,143 +313,23 @@ export class SSHExecutor extends EventEmitter {
         this.emit('output', '✅ [0/6] Verificações concluídas, servidor pronto!');
       });
 
-      // System setup steps (skip if server is already configured)
-      if (!skipSystemSetup) {
-        // Step 1: System Update
-        await this.executeStep('system_update', '📦 [1/6] Atualizando Sistema', async () => {
-        this.emit('output', '🔄 Limpando processos travados...');
-        // Kill any blocking apt/dpkg processes first
-        await this.execCommandWithOutput('pkill -9 apt-get || true');
-        await this.execCommandWithOutput('pkill -9 apt || true');
-        await this.execCommandWithOutput('pkill -9 dpkg || true');
+      // Simplified: Just verify VPS is ready
+      await this.executeStep('verify', '🔍 [1/3] Verificando VPS', async () => {
+        this.emit('output', '🔍 Verificando se o VPS está configurado...');
         
-        this.emit('output', '🔓 Removendo locks...');
-        // Remove lock files
-        await this.execCommandWithOutput('rm -f /var/lib/dpkg/lock-frontend || true');
-        await this.execCommandWithOutput('rm -f /var/lib/dpkg/lock || true');
-        await this.execCommandWithOutput('rm -f /var/cache/apt/archives/lock || true');
-        await this.execCommandWithOutput('rm -f /var/lib/apt/lists/lock || true');
-        
-        this.emit('output', '⚙️ Configurando pacotes pendentes...');
-        // Configure any pending packages
-        await this.execCommandWithOutput('dpkg --configure -a || true');
-        
-        // Wait for cleanup
-        await this.execCommandWithOutput('sleep 2');
-        
-        this.emit('output', '📋 Atualizando lista de pacotes...');
-        await this.execCommandWithOutput('apt-get update');
-        
-        this.emit('output', '⬆️ Atualizando sistema (pode demorar 2-3 minutos)...');
-        await this.execCommandWithOutput('DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --with-new-pkgs');
-        
-        this.emit('output', '✅ [1/6] Sistema atualizado!');
-      });
-
-      // Step 2: Install Dependencies
-      await this.executeStep('dependencies', '🔧 [2/6] Instalando Dependências', async () => {
-        this.emit('output', '📥 Instalando ferramentas básicas...');
-        await this.execCommandWithOutput('DEBIAN_FRONTEND=noninteractive apt-get install -y curl wget git software-properties-common');
-        this.emit('output', '✅ [2/6] Dependências instaladas!');
-      });
-
-      // Step 3: Install WordOps
-      await this.executeStep('wordops', '⚡ [3/6] Instalando WordOps', async () => {
-        // Define MySQL root password for both branches
-        const mysqlRootPass = 'TatameRoot2024!';
-        
+        // Check if WordOps exists
         const woCheck = await this.execCommand('which wo');
         if (!woCheck.stdout) {
-          this.emit('output', '📦 Baixando WordOps...');
-          
-          // Configure Git first (required by WordOps)
-          await this.execCommandWithOutput(`git config --global user.name "Tatame Installer"`);
-          await this.execCommandWithOutput(`git config --global user.email "${userEmail}"`);
-          
-          // Create WordOps config directory
-          await this.execCommandWithOutput('mkdir -p /etc/wo');
-          
-          // Create WordOps config file to avoid interactive prompts
-          const woConfig = `[user]
-name = Tatame Installer
-email = ${userEmail}
-
-[mysql]
-host = localhost
-port = 3306
-user = root
-password = ${mysqlRootPass}
-grant-host = localhost
-db-name = wordpress
-db-user = wordpress
-db-password = wordpress
-
-[wordpress]
-user = admin
-password = admin123
-email = ${userEmail}
-prefix = wp_
-webroot = htdocs`;
-          
-          await this.execCommandWithOutput(`echo '${woConfig}' > /etc/wo/wo.conf`);
-          
-          // Install WordOps with environment variables and timeout
-          this.emit('output', '📥 Baixando instalador do WordOps...');
-          await this.execCommandWithOutput('wget -qO wo wops.cc');
-          
-          this.emit('output', '🚀 Instalando WordOps (máximo 4 minutos)...');
-          // Use timeout to prevent hanging and force non-interactive mode
-          await this.execCommandWithOutput(`timeout 240 bash -c 'export DEBIAN_FRONTEND=noninteractive && WO_INSTALL_USER="Tatame Installer" WO_INSTALL_EMAIL="${userEmail}" bash wo --force'`);
-          
-          await this.execCommandWithOutput('rm -f wo');
-          this.emit('output', '✅ [3/6] WordOps instalado com sucesso!');
-          
-          // Setup MySQL root access
-          this.emit('output', '🔧 Configurando MySQL...');
-          
-          // Use sudo mysql to configure root access (works with auth_socket plugin)
-          // mysqlRootPass is already defined above
-          await this.execCommandWithOutput(`sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${mysqlRootPass}';" || true`);
-          await this.execCommandWithOutput(`sudo mysql -e "FLUSH PRIVILEGES;" || true`);
-          
-          // Create .my.cnf for root access with password
-          const myCnf = `[client]
-user=root
-password=${mysqlRootPass}`;
-          
-          // Create in both locations to ensure WordOps finds it
-          await this.execCommandWithOutput(`echo '${myCnf}' > /root/.my.cnf`);
-          await this.execCommandWithOutput('chmod 600 /root/.my.cnf');
-          await this.execCommandWithOutput(`echo '${myCnf}' > ~/.my.cnf`);
-          await this.execCommandWithOutput('chmod 600 ~/.my.cnf');
-          
-          // Test connection with password
-          await this.execCommandWithOutput(`mysql -u root -p'${mysqlRootPass}' -e "SELECT 1;" || true`);
-        } else {
-          this.emit('output', '✅ [3/6] WordOps já instalado');
-          
-          // Still configure Git if not already done
-          await this.execCommandWithOutput(`git config --global user.name "Tatame Installer" || true`);
-          await this.execCommandWithOutput(`git config --global user.email "${userEmail}" || true`);
-          
-          // Ensure MySQL access is configured (same process as above)
-          this.emit('output', '🔧 Reconfigurando MySQL...');
-          // mysqlRootPass is already defined above
-          await this.execCommandWithOutput(`sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${mysqlRootPass}';" || true`);
-          await this.execCommandWithOutput(`sudo mysql -e "FLUSH PRIVILEGES;" || true`);
-          const myCnf = `[client]
-user=root
-password=${mysqlRootPass}`;
-          await this.execCommandWithOutput(`echo '${myCnf}' > /root/.my.cnf || true`);
-          await this.execCommandWithOutput('chmod 600 /root/.my.cnf || true');
-          await this.execCommandWithOutput(`echo '${myCnf}' > ~/.my.cnf || true`);
-          await this.execCommandWithOutput('chmod 600 ~/.my.cnf || true');
-          await this.execCommandWithOutput(`mysql -u root -p'${mysqlRootPass}' -e "SELECT 1;" || true`);
+          throw new Error('WordOps não encontrado. Execute o setup do VPS primeiro:\nwget https://raw.githubusercontent.com/medeirosjj123/vps/main/scripts/vps-setup-auto.sh && bash vps-setup-auto.sh');
         }
-      });
-      } else {
-        this.emit('output', '⚡ Servidor já configurado - pulando configuração do sistema');
-        this.emit('output', '✅ WordOps, Nginx, MySQL e PHP já estão instalados');
+        
+        // Verify WordOps is working
+        const woVersion = await this.execCommand('wo --version');
+        if (woVersion.code !== 0) {
+          throw new Error('WordOps não está funcionando corretamente.');
+        }
+        
+        this.emit('output', '✅ [1/3] VPS verificado e pronto!');
         
         // If WP-CLI is not installed on existing server, install it quickly
         if (!serverConfig.hasWPCLI) {
@@ -475,10 +340,10 @@ password=${mysqlRootPass}`;
           await this.execCommandWithOutput('mv wp-cli.phar /usr/local/bin/wp');
           this.emit('output', '✅ WP-CLI instalado');
         }
-      }
+      });
 
-      // Step 4: Create WordPress Site  
-      await this.executeStep('wordpress', '🌐 [4/6] Criando Site WordPress', async () => {
+      // Step 2: Create WordPress Site  
+      await this.executeStep('wordpress', '🌐 [2/3] Criando Site WordPress', async () => {
         this.emit('output', `🌐 Preparando para criar site: ${domain}`);
         
         // Double-check if site already exists (in case it was created between checks)
@@ -518,146 +383,31 @@ password=${mysqlRootPass}`;
           createCommand = `wo site create ${domain} --wp --php82 --user='${wpUser}' --pass='${escapedWpPass}' --email='${wpEmail}'`;
         }
         
-        // Pre-flight checks before WordOps
-        this.emit('output', '🔍 Executando verificações pré-voo...');
+        this.emit('output', '🔄 Criando site WordPress...');
         
-        // Check MySQL connectivity
-        try {
-          this.emit('output', '📊 Testando conectividade MySQL...');
-          const mysqlTest = await this.execCommand('timeout 10 mysql -e "SELECT 1" 2>&1');
-          if (mysqlTest.code !== 0) {
-            throw new Error(`MySQL não acessível: ${mysqlTest.stderr}`);
-          }
-          this.emit('output', '✅ MySQL conectável');
-        } catch (error) {
-          throw new Error(`Falha na conectividade MySQL: ${error.message}`);
-        }
-        
-        // Check WordOps health
-        try {
-          this.emit('output', '🛠️  Testando WordOps...');
-          const woTest = await this.execCommand('timeout 10 wo --version 2>&1');
-          if (woTest.code !== 0) {
-            throw new Error(`WordOps não responsivo: ${woTest.stderr}`);
-          }
-          this.emit('output', '✅ WordOps responsivo');
-        } catch (error) {
-          throw new Error(`Falha no teste WordOps: ${error.message}`);
-        }
-        
-        // Check for hanging WordOps processes
-        try {
-          this.emit('output', '🔍 Verificando processos WordOps...');
-          const woProcesses = await this.execCommand('pgrep -f "wo site create" | wc -l');
-          const processCount = parseInt(woProcesses.stdout.trim());
-          if (processCount > 0) {
-            this.emit('output', `⚠️  Detectados ${processCount} processos WordOps em execução`);
-            this.emit('output', '🧹 Limpando processos antigos...');
-            await this.execCommand('pkill -f "wo site create" 2>/dev/null || true');
-            await this.execCommand('sleep 3'); // Wait for cleanup
-          }
-          this.emit('output', '✅ Processos WordOps limpos');
-        } catch (error) {
-          this.emit('output', `⚠️  Aviso: Não foi possível verificar processos: ${error.message}`);
-        }
-        
-        // Check disk space
-        try {
-          this.emit('output', '💾 Verificando espaço em disco...');
-          const diskTest = await this.execCommand("df /var/www/ | awk 'NR==2 {print $4}'");
-          const freeSpaceKB = parseInt(diskTest.stdout.trim());
-          if (freeSpaceKB < 1048576) { // Less than 1GB
-            throw new Error(`Espaço insuficiente: ${Math.round(freeSpaceKB/1024)}MB disponível, mínimo 1GB`);
-          }
-          this.emit('output', `✅ Espaço suficiente: ${Math.round(freeSpaceKB/1024/1024)}GB`);
-        } catch (error) {
-          throw new Error(`Falha na verificação de espaço: ${error.message}`);
-        }
-        
-        this.emit('output', '🔄 Criando site com WordOps (máximo 2 minutos)...');
-        this.emit('output', `🎯 Comando: ${createCommand}`);
+        // Clean up any hanging processes
+        await this.execCommand('pkill -f "wo site create" 2>/dev/null || true');
         
         // Try to create the site with improved timeout
         try {
           const createResult = await this.execCommand(`timeout 120 ${createCommand} 2>&1`);
           
-          // Check if WordPress was created (even if SSL failed)
+          // Check if WordPress was created
           const output = createResult.stdout + createResult.stderr;
           if (output.includes('Successfully created site') || 
               output.includes('Installing WordPress') ||
-              output.includes('Aborting SSL certificate')) {
-            this.emit('output', `✅ [4/5] Site WordPress criado: ${domain}`);
-            if (output.includes('Aborting SSL certificate')) {
-              this.emit('output', '⚠️  SSL certificate failed but site is accessible via HTTP');
-            }
-          } else if (createResult.code === 124 || createResult.code === 4) {
-            this.emit('output', '⚠️  WordPress creation timed out, checking if site was created...');
-            // Check if site was partially created
-            const checkSite = await this.execCommand(`wo site info ${domain} 2>/dev/null || echo "not found"`);
-            if (checkSite.stdout && !checkSite.stdout.includes('not found')) {
-              this.emit('output', '✅ [4/5] Site was created despite timeout');
-            } else {
-              throw new Error('Site creation timed out and site not found');
-            }
+              createResult.code === 0) {
+            this.emit('output', '✅ Site WordPress criado com sucesso');
           } else {
             throw new Error('Failed to create WordPress site');
           }
         } catch (error) {
-          this.emit('output', `❌ Erro na criação do site: ${error.message}`);
-          
-          // Enhanced error diagnostics
-          this.emit('output', '🔍 Executando diagnósticos...');
-          
-          // Check if timeout
-          if (error.code === 124 || error.code === 4 || error.message.includes('timeout')) {
-            this.emit('output', '⏰ Timeout detectado - verificando se site foi criado...');
-            
-            // Check if site exists anyway
-            const checkSite = await this.execCommand(`wo site info ${domain} 2>/dev/null || echo "not found"`);
-            if (checkSite.stdout && !checkSite.stdout.includes('not found')) {
-              this.emit('output', '✅ [4/5] Site foi criado apesar do timeout, continuando...');
-            } else {
-              // Detailed timeout analysis
-              this.emit('output', '📊 Análise do timeout:');
-              
-              // Check MySQL status
-              const mysqlStatus = await this.execCommand('systemctl is-active mysql 2>/dev/null || echo "unknown"');
-              this.emit('output', `   • MySQL status: ${mysqlStatus.stdout.trim()}`);
-              
-              // Check disk usage
-              const diskUsage = await this.execCommand("df -h /var/www/ | awk 'NR==2 {print $5}'");
-              this.emit('output', `   • Disk usage: ${diskUsage.stdout.trim()}`);
-              
-              // Check memory
-              const memUsage = await this.execCommand("free | awk 'NR==2{printf \"%.1f%%\", $3*100/$2 }'");
-              this.emit('output', `   • Memory usage: ${memUsage.stdout.trim()}`);
-              
-              // Check load average
-              const loadAvg = await this.execCommand("uptime | awk -F'load average:' '{print $2}'");
-              this.emit('output', `   • Load average:${loadAvg.stdout.trim()}`);
-              
-              throw new Error(`WordOps timeout: Comando não completou em 2 minutos. Causas possíveis:
-• Download lento do WordPress
-• Problemas de conectividade MySQL
-• Alto uso de recursos do servidor
-• Problemas de DNS/rede
-• WordOps aguardando entrada do usuário
-
-Detalhes: ${error.message}`);
-            }
+          // Simple error handling - check if site was created anyway
+          const checkSite = await this.execCommand(`wo site info ${domain} 2>/dev/null || echo "not found"`);
+          if (checkSite.stdout && !checkSite.stdout.includes('not found')) {
+            this.emit('output', '✅ Site criado com sucesso (verificação secundária)');
           } else {
-            // Non-timeout error - provide specific guidance
-            this.emit('output', '💡 Analisando erro específico...');
-            
-            if (error.message.includes('mysql') || error.message.includes('database')) {
-              throw new Error(`Erro MySQL: ${error.message}. Verifique se o MySQL está funcionando e acessível.`);
-            } else if (error.message.includes('download') || error.message.includes('fetch')) {
-              throw new Error(`Erro de download: ${error.message}. Verifique conectividade com a internet.`);
-            } else if (error.message.includes('permission') || error.message.includes('denied')) {
-              throw new Error(`Erro de permissão: ${error.message}. Verifique permissões do usuário root.`);
-            } else {
-              throw new Error(`Falha na criação do site: ${error.message}`);
-            }
+            throw new Error(`Falha na criação do site: ${(error as any).message}`);
           }
         }
         
@@ -740,7 +490,7 @@ EOF`);
       });
 
       // Step 5: Theme & Plugin Installation
-      await this.executeStep('wordpress_customization', '🎨 [5/6] Configurando Tema & Plugins', async () => {
+      await this.executeStep('wordpress_customization', '🎨 [3/3] Configurando Tema & Plugins', async () => {
         this.emit('output', '🎨 Configurando WordPress com tema e plugins selecionados...');
         
         // Change to WordPress directory for WP-CLI commands
@@ -805,42 +555,18 @@ EOF`);
         this.emit('output', '🔗 Configurando permalinks...');
         await this.execCommandWithOutput(`cd ${wpPath} && sudo -u www-data wp rewrite structure '/%postname%/' --hard || true`);
         
-        this.emit('output', '✅ [5/6] Tema e plugins configurados com sucesso!');
+        this.emit('output', '✅ [3/3] Tema e plugins configurados com sucesso!');
       });
 
-      // Step 6: Security & Final Setup
-      await this.executeStep('security', '🔒 [6/6] Finalizando Instalação', async () => {
-        // Set proper permissions
-        await this.execCommandWithOutput(`chown -R www-data:www-data /var/www/${domain}/htdocs || true`);
-        await this.execCommandWithOutput(`find /var/www/${domain}/htdocs -type d -exec chmod 755 {} \\; || true`);
-        await this.execCommandWithOutput(`find /var/www/${domain}/htdocs -type f -exec chmod 644 {} \\; || true`);
-        
-        // Configure firewall
-        await this.execCommandWithOutput('ufw allow 22/tcp || true');
-        await this.execCommandWithOutput('ufw allow 80/tcp || true');
-        await this.execCommandWithOutput('ufw allow 443/tcp || true');
-        
-        // Enable UFW with multiple fallback methods
-        this.emit('output', '🔧 Habilitando firewall UFW...');
-        try {
-          // Try non-interactive force enable first
-          const ufwResult = await this.execCommand('timeout 15 ufw --force enable 2>&1 || echo "ufw_failed"');
-          if (ufwResult.stdout.includes('ufw_failed') || ufwResult.code !== 0) {
-            this.emit('output', '⚠️  UFW force enable failed, trying alternative...');
-            // Fallback: try with echo method
-            await this.execCommand('timeout 10 bash -c "echo y | ufw enable" 2>&1 || true');
-          }
-          this.emit('output', '✅ Firewall UFW configurado');
-        } catch (error) {
-          this.emit('output', '⚠️  Firewall skip - continuando instalação');
-        }
-        
-        // Ensure step completion is logged
-        this.emit('output', '🔒 Permissões e segurança configuradas');
-        this.emit('output', '🎯 Finalizando última etapa...');
-        
-        this.emit('output', '✅ [6/6] Instalação finalizada!');
-      });
+      // Final Setup - just emit completion since everything is done
+      this.emit('output', '🔒 Finalizando instalação...');
+      
+      // Set proper permissions
+      await this.execCommandWithOutput(`chown -R www-data:www-data /var/www/${domain}/htdocs || true`);
+      await this.execCommandWithOutput(`find /var/www/${domain}/htdocs -type d -exec chmod 755 {} \\; || true`);
+      await this.execCommandWithOutput(`find /var/www/${domain}/htdocs -type f -exec chmod 644 {} \\; || true`);
+      
+      this.emit('output', '✅ Instalação finalizada!');
 
       // Emit explicit installation completion event
       this.emit('output', '\n🎉 TODAS AS ETAPAS CONCLUÍDAS!');

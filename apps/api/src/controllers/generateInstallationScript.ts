@@ -151,10 +151,10 @@ export async function generateInstallationScript(req: AuthRequest, res: Response
     }
 
     // Validate inputs
-    if (!templateId || !domain || !vpsConfig) {
+    if (!templateId || !domain || !vpsConfig || !vpsConfig.installationType) {
       res.status(400).json({
         success: false,
-        message: 'Template ID, domain, and VPS configuration are required'
+        message: 'Template ID, domain, installation type, and VPS configuration are required'
       });
       return;
     }
@@ -275,15 +275,24 @@ export async function generateInstallationScript(req: AuthRequest, res: Response
 
     await installation.save();
 
-    // Generate the installation script
-    const script = generateBashScript({
-      domain,
-      templateUrl: templateUrl || template.downloadUrl,
-      templateName: template.name,
-      installToken,
-      apiUrl,
-      userEmail
-    });
+    // Generate the installation script based on type
+    const script = vpsConfig.installationType === 'fresh' 
+      ? generateFreshInstallScript({
+          domain,
+          templateUrl: templateUrl || template.downloadUrl,
+          templateName: template.name,
+          installToken,
+          apiUrl,
+          userEmail
+        })
+      : generateAddSiteScript({
+          domain,
+          templateUrl: templateUrl || template.downloadUrl,
+          templateName: template.name,
+          installToken,
+          apiUrl,
+          userEmail
+        });
 
     logger.info({ 
       userId, 
@@ -309,9 +318,9 @@ export async function generateInstallationScript(req: AuthRequest, res: Response
 }
 
 /**
- * Generate the actual bash installation script
+ * Generate fresh installation script (complete VPS reset + WordOps install)
  */
-function generateBashScript(params: {
+function generateFreshInstallScript(params: {
   domain: string;
   templateUrl: string;
   templateName: string;
@@ -371,21 +380,59 @@ echo -e "\${GREEN}   WordPress Installer - Tatame        \${NC}"
 echo -e "\${GREEN}========================================\${NC}"
 echo ""
 
+# 0. VPS Reset and Cleanup (Fresh Installation)
+echo -e "\${YELLOW}[0/9] Cleaning VPS for fresh installation...\${NC}"
+report_progress "vps_cleanup" "running" "Cleaning VPS for fresh installation"
+
+# Stop all web services
+echo -e "\${YELLOW}Stopping existing web services...\${NC}"
+systemctl stop nginx apache2 2>/dev/null || true
+systemctl stop mysql mariadb 2>/dev/null || true
+systemctl stop php*-fpm 2>/dev/null || true
+
+# Remove existing WordOps installation if present
+if command -v wo &> /dev/null; then
+    echo -e "\${YELLOW}Removing existing WordOps installation...\${NC}"
+    # Remove all WordOps sites
+    wo site list --format=text 2>/dev/null | grep -v "^$" | while read site; do
+        wo site delete \$site --no-prompt --force 2>/dev/null || true
+    done
+    # Uninstall WordOps
+    rm -rf /etc/wo /opt/wo /usr/local/bin/wo ~/.wo 2>/dev/null || true
+fi
+
+# Clean up web directories
+echo -e "\${YELLOW}Cleaning web directories...\${NC}"
+rm -rf /var/www/* 2>/dev/null || true
+rm -rf /etc/nginx/sites-* /etc/apache2/sites-* 2>/dev/null || true
+
+# Remove web packages
+echo -e "\${YELLOW}Removing existing web packages...\${NC}"
+apt-get remove --purge -y nginx* apache2* mysql* mariadb* php* 2>/dev/null || true
+apt-get autoremove -y 2>/dev/null || true
+apt-get autoclean 2>/dev/null || true
+
+# Clean package cache
+apt-get clean 2>/dev/null || true
+
+echo -e "\${GREEN}VPS cleanup completed\${NC}"
+report_progress "vps_cleanup" "completed" "VPS cleaned for fresh installation"
+
 # 1. System Update
-echo -e "\${YELLOW}[1/8] Updating system packages...\${NC}"
+echo -e "\${YELLOW}[1/9] Updating system packages...\${NC}"
 report_progress "system_update" "running" "Updating system packages"
 apt-get update -qq || handle_error "Failed to update packages"
 apt-get upgrade -y -qq || handle_error "Failed to upgrade packages"
 report_progress "system_update" "completed" "System updated"
 
 # 2. Install Dependencies
-echo -e "\${YELLOW}[2/8] Installing dependencies...\${NC}"
+echo -e "\${YELLOW}[2/9] Installing dependencies...\${NC}"
 report_progress "dependencies" "running" "Installing dependencies"
 apt-get install -y -qq curl wget git software-properties-common || handle_error "Failed to install dependencies"
 report_progress "dependencies" "completed" "Dependencies installed"
 
 # 3. Install WordOps
-echo -e "\${YELLOW}[3/8] Installing WordOps...\${NC}"
+echo -e "\${YELLOW}[3/9] Installing WordOps...\${NC}"
 report_progress "wordops" "running" "Installing WordOps"
 
 # Configure Git for WordOps (required for configuration management)
@@ -427,7 +474,7 @@ fi
 report_progress "wordops" "completed" "WordOps installed and configured"
 
 # 4. Create WordPress site
-echo -e "\${YELLOW}[4/8] Creating WordPress site...\${NC}"
+echo -e "\${YELLOW}[4/9] Creating WordPress site...\${NC}"
 report_progress "wordpress" "running" "Creating WordPress site"
 
 # Generate random credentials
@@ -449,7 +496,7 @@ wo site create ${domain} --wp \\
 report_progress "wordpress" "completed" "WordPress site created"
 
 # 5. Download and apply template
-echo -e "\${YELLOW}[5/8] Applying template...\${NC}"
+echo -e "\${YELLOW}[5/9] Applying template...\${NC}"
 report_progress "template" "running" "Downloading and applying template"
 
 cd /var/www/${domain}/htdocs
@@ -468,7 +515,7 @@ fi
 report_progress "template" "completed" "Template applied"
 
 # 6. Security hardening
-echo -e "\${YELLOW}[6/8] Applying security hardening...\${NC}"
+echo -e "\${YELLOW}[6/9] Applying security hardening...\${NC}"
 report_progress "security" "running" "Hardening security"
 
 # Set proper permissions
@@ -485,7 +532,7 @@ echo "y" | ufw enable
 report_progress "security" "completed" "Security hardened"
 
 # 7. Performance optimization
-echo -e "\${YELLOW}[7/8] Optimizing performance...\${NC}"
+echo -e "\${YELLOW}[7/9] Optimizing performance...\${NC}"
 report_progress "optimization" "running" "Optimizing performance"
 
 # Enable OPcache
@@ -500,7 +547,7 @@ systemctl restart nginx
 report_progress "optimization" "completed" "Performance optimized"
 
 # 8. Final verification
-echo -e "\${YELLOW}[8/8] Verifying installation...\${NC}"
+echo -e "\${YELLOW}[8/9] Verifying installation...\${NC}"
 report_progress "verification" "running" "Verifying installation"
 
 # Test if site is accessible
@@ -531,7 +578,8 @@ DB Pass: \$DB_PASS
 ===================================
 EOF
     
-    # Report success
+    # 9. Final completion
+    echo -e "\${YELLOW}[9/9] Finalizing installation...\${NC}"
     report_progress "complete" "completed" "Installation successful"
 else
     handle_error "Site verification failed"
@@ -542,5 +590,185 @@ echo -e "\${YELLOW}Removing installation script...\${NC}"
 rm -- "\$0"
 
 echo -e "\${GREEN}All done! Enjoy your new WordPress site!\${NC}"
+`;
+}
+
+/**
+ * Generate add site script (for existing WordOps installations)
+ */
+function generateAddSiteScript(params: {
+  domain: string;
+  templateUrl: string;
+  templateName: string;
+  installToken: string;
+  apiUrl: string;
+  userEmail: string;
+}): string {
+  const { domain, templateUrl, templateName, installToken, apiUrl, userEmail } = params;
+
+  return `#!/bin/bash
+#############################################
+# WordPress Site Addition - Tatame Platform
+# Domain: ${domain}
+# Template: ${templateName}
+# Generated: ${new Date().toISOString()}
+#############################################
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\\\\033[0;31m'
+GREEN='\\\\033[0;32m'
+YELLOW='\\\\033[1;33m'
+NC='\\\\033[0m' # No Color
+
+# Installation token for tracking
+INSTALL_TOKEN="${installToken}"
+API_URL="${apiUrl}"
+
+# Function to report progress
+report_progress() {
+    local step="$1"
+    local status="$2"
+    local message="$3"
+    
+    curl -X POST "$API_URL/api/installations/progress" \\\\
+        -H "Content-Type: application/json" \\\\
+        -H "ngrok-skip-browser-warning: true" \\\\
+        -d "{\\\\"token\\\\": \\\\"$INSTALL_TOKEN\\\\", \\\\"step\\\\": \\\\"$step\\\\", \\\\"status\\\\": \\\\"$status\\\\", \\\\"message\\\\": \\\\"$message\\\\"}" \\\\
+        2>/dev/null || true
+}
+
+# Function to handle errors
+handle_error() {
+    echo -e "\\${RED}[ERROR] $1\\${NC}"
+    report_progress "error" "failed" "$1"
+    exit 1
+}
+
+# Check if running as root
+if [[ $EUID -ne 0 ]]; then
+   handle_error "This script must be run as root"
+fi
+
+echo -e "\\${GREEN}========================================\\${NC}"
+echo -e "\\${GREEN}   WordPress Site Addition - Tatame    \\${NC}"
+echo -e "\\${GREEN}========================================\\${NC}"
+echo ""
+
+# 1. Check WordOps Installation
+echo -e "\\${YELLOW}[1/5] Checking WordOps installation...\\${NC}"
+report_progress "wordops_check" "running" "Checking WordOps installation"
+
+if ! command -v wo &> /dev/null; then
+    handle_error "WordOps not found! Please use 'Fresh Install' option first."
+fi
+
+# Test WordOps
+if ! wo version &> /dev/null; then
+    handle_error "WordOps installation appears corrupted. Please use 'Fresh Install' option."
+fi
+
+report_progress "wordops_check" "completed" "WordOps is ready"
+
+# 2. Check if domain already exists
+echo -e "\\${YELLOW}[2/5] Checking domain availability...\\${NC}"
+report_progress "domain_check" "running" "Checking if domain already exists"
+
+if wo site info ${domain} &> /dev/null; then
+    handle_error "Domain ${domain} already exists! Please use a different domain or remove the existing site first."
+fi
+
+report_progress "domain_check" "completed" "Domain is available"
+
+# 3. Create WordPress site
+echo -e "\\${YELLOW}[3/5] Creating WordPress site...\\${NC}"
+report_progress "wordpress" "running" "Creating WordPress site"
+
+# Generate random credentials
+DB_NAME="wp_\\$(openssl rand -hex 4)"
+DB_USER="wp_\\$(openssl rand -hex 4)"
+DB_PASS="\\$(openssl rand -base64 32)"
+WP_USER="admin"
+WP_PASS="\\$(openssl rand -base64 16)"
+WP_EMAIL="${userEmail}"
+
+# Create site with WordOps
+wo site create ${domain} --wp \\\\
+    --php81 \\\\
+    --mysql \\\\
+    --le \\\\
+    --wpfc \\\\
+    --wpredis || handle_error "Failed to create WordPress site"
+
+report_progress "wordpress" "completed" "WordPress site created"
+
+# 4. Download and apply template
+echo -e "\\${YELLOW}[4/5] Applying template...\\${NC}"
+report_progress "template" "running" "Downloading and applying template"
+
+cd /var/www/${domain}/htdocs
+
+# Download template if URL provided
+if [ ! -z "${templateUrl}" ]; then
+    wget -q --header="ngrok-skip-browser-warning: true" "${templateUrl}" -O template.wpress || handle_error "Failed to download template"
+    
+    # Install All-in-One WP Migration plugin
+    wp plugin install all-in-one-wp-migration --activate --allow-root || handle_error "Failed to install migration plugin"
+    
+    # Import template (would need the CLI extension)
+    echo "Template downloaded. Manual import may be required."
+fi
+
+# Set proper permissions
+chown -R www-data:www-data /var/www/${domain}/htdocs
+find /var/www/${domain}/htdocs -type d -exec chmod 755 {} \\\\;
+find /var/www/${domain}/htdocs -type f -exec chmod 644 {} \\\\;
+
+report_progress "template" "completed" "Template applied"
+
+# 5. Final verification
+echo -e "\\${YELLOW}[5/5] Verifying installation...\\${NC}"
+report_progress "verification" "running" "Verifying installation"
+
+# Test if site is accessible
+if curl -sI https://${domain} | grep -q "200 OK"; then
+    report_progress "verification" "completed" "Installation verified"
+    echo -e "\\${GREEN}========================================\\${NC}"
+    echo -e "\\${GREEN}   Site Addition Complete!             \\${NC}"
+    echo -e "\\${GREEN}========================================\\${NC}"
+    echo ""
+    echo -e "Site URL: \\${GREEN}https://${domain}\\${NC}"
+    echo -e "Admin URL: \\${GREEN}https://${domain}/wp-admin\\${NC}"
+    echo -e "Username: \\${GREEN}\\$WP_USER\\${NC}"
+    echo -e "Password: \\${GREEN}\\$WP_PASS\\${NC}"
+    echo ""
+    echo -e "Credentials saved to: \\${YELLOW}/root/${domain}_credentials.txt\\${NC}"
+    
+    # Save credentials
+    cat > /root/${domain}_credentials.txt <<EOF
+WordPress Site Addition Credentials
+===================================
+Site URL: https://${domain}
+Admin URL: https://${domain}/wp-admin
+Username: \\$WP_USER
+Password: \\$WP_PASS
+Database: \\$DB_NAME
+DB User: \\$DB_USER
+DB Pass: \\$DB_PASS
+===================================
+EOF
+    
+    # Report success
+    report_progress "complete" "completed" "Site addition successful"
+else
+    handle_error "Site verification failed"
+fi
+
+# Self-destruct
+echo -e "\\${YELLOW}Removing installation script...\\${NC}"
+rm -- "\\$0"
+
+echo -e "\\${GREEN}All done! Your new WordPress site is ready!\\${NC}"
 `;
 }

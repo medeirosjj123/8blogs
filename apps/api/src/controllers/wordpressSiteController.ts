@@ -76,7 +76,7 @@ export async function getUserWordPressSites(req: AuthRequest, res: Response): Pr
         username: installation.credentials?.username || installation.installationOptions?.wordpressConfig?.credentials?.adminUsername || 'admin',
         applicationPassword: isExistingSite 
           ? installation.credentials?.password 
-          : installation.credentials?.password || installation.installationOptions?.wordpressConfig?.credentials?.adminPassword || 'admin123',
+          : installation.credentials?.password || installation.installationOptions?.wordpressConfig?.credentials?.adminPassword || 'bloghouse123',
         isActive: true,
         isDefault: false,
         testConnection: {
