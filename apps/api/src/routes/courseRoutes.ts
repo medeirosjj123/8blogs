@@ -7,14 +7,18 @@ import {
   getCourseModules,
   createCourse,
   updateCourse,
-  deleteCourse
+  deleteCourse,
+  debugUserPlan
 } from '../controllers/courseController';
-import { authenticate } from '../middlewares/authMiddleware';
+import { authenticate, optionalAuth } from '../middlewares/authMiddleware';
 
 const router = Router();
 
-// Public routes (no auth required)
-router.get('/', getCourses);
+// Public routes (optional auth - populates user if authenticated)
+router.get('/', optionalAuth, getCourses);
+
+// Debug route
+router.get('/debug/user-plan', authenticate, debugUserPlan);
 
 // Protected routes (auth required)
 router.post('/', authenticate, createCourse);

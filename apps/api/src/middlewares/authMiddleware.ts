@@ -152,3 +152,70 @@ export const requireAdmin = (
 
   next();
 };
+
+// Optional authentication middleware - continues even if no token
+export async function optionalAuth(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  let token: string | null = null;
+  
+  try {
+    // Try to get token from Authorization header first
+    token = extractBearerToken(req.headers.authorization);
+    
+    // If not in header, try cookies
+    if (!token && req.cookies?.access_token) {
+      token = req.cookies.access_token;
+    }
+    
+    // If still no token, try query parameter (for WebSocket)
+    if (!token && req.query?.token) {
+      token = req.query.token as string;
+    }
+    
+    if (!token) {
+      // No token provided, continue without authentication
+      next();
+      return;
+    }
+    
+    const payload = verifyJWT(token);
+    
+    // Verify user still exists and is active
+    const user = await User.findById(payload.userId);
+    
+    if (!user) {
+      logger.warn({
+        userId: payload.userId,
+        email: payload.email,
+        url: req.url,
+        method: req.method
+      }, 'Optional auth failed: User not found in database');
+      
+      // Continue without authentication
+      next();
+      return;
+    }
+    
+    // Attach user info to request
+    req.user = {
+      userId: payload.userId,
+      email: payload.email,
+      role: payload.role
+    };
+    
+    next();
+  } catch (error) {
+    logger.warn({
+      error: error instanceof Error ? error.message : 'Unknown error',
+      url: req.url,
+      method: req.method,
+      hasToken: !!token
+    }, 'Optional authentication failed: Invalid token, continuing without auth');
+    
+    // Continue without authentication even if token is invalid
+    next();
+  }
+}

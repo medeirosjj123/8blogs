@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Course } from '../models/Course';
 import { Module } from '../models/Module';
 import { Lesson } from '../models/Lesson';
+import { User } from '../models/User';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import pino from 'pino';
 
@@ -18,16 +19,82 @@ const logger = pino({
 });
 
 // Get all published courses
-export async function getCourses(req: Request, res: Response): Promise<void> {
+export async function debugUserPlan(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        error: 'Not authenticated'
+      });
+      return;
+    }
+
+    const user = await User.findById(req.user.userId);
+    
+    res.json({
+      success: true,
+      data: {
+        userId: req.user.userId,
+        userEmail: user?.email,
+        directPlan: user?.plan,
+        subscription: user?.subscription,
+        calculatedPlan: user?.plan || user?.subscription?.plan || 'starter',
+        isBlackBelt: (user?.plan || user?.subscription?.plan || 'starter') === 'black_belt'
+      }
+    });
+  } catch (error) {
+    logger.error({ error }, 'Error in debug endpoint');
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch debug info'
+    });
+  }
+}
+
+export async function getCourses(req: AuthRequest, res: Response): Promise<void> {
   try {
     const courses = await Course.find({ isPublished: true })
       .populate('modules')
       .sort({ order: 1, createdAt: -1 });
     
+    // Check user plan for course access (handle both authenticated and unauthenticated requests)
+    let userPlan = 'starter';
+    if (req.user) {
+      try {
+        const user = await User.findById(req.user.userId);
+        userPlan = user?.plan || user?.subscription?.plan || 'starter';
+        
+        // Debug logging
+        logger.info({
+          userId: req.user.userId,
+          userEmail: user?.email,
+          directPlan: user?.plan,
+          subscriptionPlan: user?.subscription?.plan,
+          finalUserPlan: userPlan,
+          isBlackBelt: userPlan === 'black_belt'
+        }, 'Course access plan check');
+      } catch (error) {
+        logger.warn({ error: error instanceof Error ? error.message : 'Unknown error' }, 'Could not fetch user plan, defaulting to starter');
+      }
+    }
+    
     // Map courses with real module data
     const coursesData = await Promise.all(courses.map(async (course) => {
       const modules = await Module.find({ courseId: course._id }).populate('lessons');
       const totalLessons = modules.reduce((sum, module) => sum + module.lessons.length, 0);
+      
+      // Courses are only accessible to Black Belt users
+      const isLocked = userPlan !== 'black_belt';
+      
+      // Debug logging for each course
+      if (course.title.includes('SEO') || course.title.includes('Introdução')) {
+        logger.info({
+          courseTitle: course.title,
+          userPlan,
+          isLocked,
+          lockLogic: `${userPlan} !== 'black_belt' = ${isLocked}`
+        }, 'Course lock status');
+      }
       
       return {
         id: course._id,
@@ -44,7 +111,7 @@ export async function getCourses(req: Request, res: Response): Promise<void> {
         completedLessons: 0,
         progress: 0,
         belt: course.level === 'advanced' ? 'roxa' : course.level === 'intermediate' ? 'azul' : 'branca',
-        isLocked: false,
+        isLocked,
         students: Math.floor(Math.random() * 500) + 100,
         currentLesson: null
       };
@@ -85,6 +152,34 @@ export async function getCourse(req: AuthRequest, res: Response): Promise<void> 
       res.status(404).json({
         success: false,
         error: { message: 'Course not found' }
+      });
+      return;
+    }
+    
+    // Check user plan for course access
+    if (req.user) {
+      try {
+        const user = await User.findById(req.user.userId);
+        const userPlan = user?.plan || user?.subscription?.plan || 'starter';
+        if (userPlan !== 'black_belt') {
+          res.status(403).json({
+            success: false,
+            error: { message: 'Black Belt plan required to access courses' }
+          });
+          return;
+        }
+      } catch (error) {
+        logger.error({ error }, 'Error checking user plan for course access');
+        res.status(500).json({
+          success: false,
+          error: { message: 'Failed to check user access' }
+        });
+        return;
+      }
+    } else {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Authentication required to access courses' }
       });
       return;
     }
@@ -189,13 +284,35 @@ export async function getLesson(req: AuthRequest, res: Response): Promise<void> 
       return;
     }
     
-    // Check if user has access (free lesson or paid user)
-    if (!lesson.isFree && !req.user) {
-      res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Authentication required to access this lesson'
-      });
-      return;
+    // Check if user has access (free lesson or black belt user)
+    if (!lesson.isFree) {
+      if (!req.user) {
+        res.status(401).json({
+          error: 'Unauthorized',
+          message: 'Authentication required to access this lesson'
+        });
+        return;
+      }
+      
+      // Check if user has Black Belt plan
+      try {
+        const user = await User.findById(req.user.userId);
+        const userPlan = user?.plan || user?.subscription?.plan || 'starter';
+        if (userPlan !== 'black_belt') {
+          res.status(403).json({
+            error: 'Forbidden',
+            message: 'Black Belt plan required to access this lesson'
+          });
+          return;
+        }
+      } catch (error) {
+        logger.error({ error }, 'Error checking user plan for lesson access');
+        res.status(500).json({
+          error: 'Server error',
+          message: 'Failed to check user access'
+        });
+        return;
+      }
     }
     
     // Get module and course info
@@ -305,6 +422,34 @@ export async function getCourseModules(req: AuthRequest, res: Response): Promise
       return;
     }
     
+    // Check user plan for course access
+    if (req.user) {
+      try {
+        const user = await User.findById(req.user.userId);
+        const userPlan = user?.plan || user?.subscription?.plan || 'starter';
+        if (userPlan !== 'black_belt') {
+          res.status(403).json({
+            success: false,
+            error: { message: 'Black Belt plan required to access courses' }
+          });
+          return;
+        }
+      } catch (error) {
+        logger.error({ error }, 'Error checking user plan for course modules access');
+        res.status(500).json({
+          success: false,
+          error: { message: 'Failed to check user access' }
+        });
+        return;
+      }
+    } else {
+      res.status(401).json({
+        success: false,
+        error: { message: 'Authentication required to access courses' }
+      });
+      return;
+    }
+    
     const modules = await Module.find({
       courseId: course._id,
       isPublished: true
@@ -322,6 +467,17 @@ export async function getCourseModules(req: AuthRequest, res: Response): Promise
         lessons
       };
     }));
+    
+    // Check user plan for course access
+    let userPlan = 'starter';
+    if (req.user) {
+      try {
+        const user = await User.findById(req.user.userId);
+        userPlan = user?.plan || user?.subscription?.plan || 'starter';
+      } catch (error) {
+        logger.warn('Could not fetch user plan for module access');
+      }
+    }
     
     // Get user progress if user is authenticated
     let userProgress = [];
@@ -345,6 +501,31 @@ export async function getCourseModules(req: AuthRequest, res: Response): Promise
         ? Math.round((completedLessons / module.lessons.length) * 100) 
         : 0;
       
+      // For Black Belt users, modules are never locked
+      // For other users, modules are locked by plan
+      const isLockedByPlan = userPlan !== 'black_belt';
+      
+      // Sequential locking only applies to non-Black Belt users
+      // (Black Belt users get full access)
+      let isLockedBySequence = false;
+      if (userPlan !== 'black_belt' && index > 0) {
+        // For non-Black Belt users, check if previous module is completed
+        const previousModuleProgress = modulesWithProgress[index - 1]?.progress || 0;
+        isLockedBySequence = previousModuleProgress < 100;
+      }
+      
+      const finalIsLocked = isLockedByPlan || isLockedBySequence;
+      
+      logger.info({
+        moduleTitle: module.title,
+        moduleIndex: index,
+        userPlan,
+        isBlackBelt: userPlan === 'black_belt',
+        isLockedByPlan,
+        isLockedBySequence,
+        finalIsLocked
+      }, 'Module lock calculation');
+      
       return {
         id: module._id,
         title: module.title,
@@ -355,7 +536,7 @@ export async function getCourseModules(req: AuthRequest, res: Response): Promise
         lessonCount: module.lessons.length,
         completedLessons,
         progress,
-        isLocked: index > 0 && modulesWithLessons[index - 1].lessons.length > 0, // Lock if previous module not completed
+        isLocked: finalIsLocked,
         lessons: module.lessons
       };
     });
