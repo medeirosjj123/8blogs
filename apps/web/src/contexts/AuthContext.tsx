@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import authService from '../services/auth.service';
@@ -35,12 +35,45 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<IUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasInitialized, setHasInitialized] = useState(false);
   const navigate = useNavigate();
+  
+  // Debug tracking
+  const loadCountRef = useRef(0);
+  const lastLoadTimeRef = useRef<number>(0);
+  const mountTimeRef = useRef<number>(Date.now());
+  
+  // Deduplication
+  const isLoadingRef = useRef(false);
+  const hasLoadedRef = useRef(false);
 
   // Load user on mount
   useEffect(() => {
+    let isMounted = true; // Prevent state updates if component unmounts
+    
     const loadUser = async () => {
-      console.log('AuthContext: Loading user...');
+      const now = Date.now();
+      const timeSinceMount = now - mountTimeRef.current;
+      const timeSinceLastLoad = now - lastLoadTimeRef.current;
+      loadCountRef.current += 1;
+      
+      console.log(`🔍 AuthContext: Loading user... (Load #${loadCountRef.current}, ${timeSinceMount}ms since mount, ${timeSinceLastLoad}ms since last load)`);
+      
+      // Prevent duplicate loads
+      if (isLoadingRef.current) {
+        console.log('⏸️ AuthContext: Already loading, skipping duplicate load');
+        return;
+      }
+      
+      // Prevent loading if already loaded and time is too short
+      if (hasLoadedRef.current && timeSinceLastLoad < 1000) {
+        console.log('⏸️ AuthContext: Recently loaded, skipping duplicate load');
+        return;
+      }
+      
+      isLoadingRef.current = true;
+      lastLoadTimeRef.current = now;
+      
       const token = tokenManager.getAccessToken();
       console.log('AuthContext: Token found:', !!token);
       
@@ -49,17 +82,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.log('AuthContext: Fetching current user...');
           const userData = await authService.getCurrentUser();
           console.log('AuthContext: User loaded successfully:', userData.email);
-          setUser(userData);
+          
+          if (isMounted) {
+            setUser(userData);
+          }
         } catch (error) {
           console.error('AuthContext: Failed to load user:', error);
           tokenManager.clearTokens();
+          
+          if (isMounted) {
+            setUser(null);
+          }
         }
       }
-      console.log('AuthContext: Loading complete, setting isLoading to false');
-      setIsLoading(false);
+      
+      if (isMounted) {
+        console.log('AuthContext: Loading complete, setting isLoading to false');
+        setIsLoading(false);
+        setHasInitialized(true);
+        hasLoadedRef.current = true;
+      }
+      
+      isLoadingRef.current = false;
     };
 
     loadUser();
+    
+    // Cleanup function to prevent state updates on unmounted component
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
@@ -130,7 +182,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
+        isAuthenticated: hasInitialized && !!user,
         isLoading,
         login,
         register,

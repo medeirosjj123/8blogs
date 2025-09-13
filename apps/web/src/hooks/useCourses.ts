@@ -7,6 +7,8 @@ export const useCourses = () => {
     queryKey: ['courses'],
     queryFn: () => courseService.getCourses(),
     staleTime: 1000 * 60 * 10, // 10 minutes
+    refetchOnWindowFocus: false,
+    // Removed refetchOnMount: false - let it fetch on first mount, then use cache
   });
 };
 
@@ -15,6 +17,9 @@ export const useCourse = (courseId: string) => {
     queryKey: ['course', courseId],
     queryFn: () => courseService.getCourse(courseId),
     enabled: !!courseId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 };
 
@@ -23,6 +28,9 @@ export const useModules = (courseId: string) => {
     queryKey: ['modules', courseId],
     queryFn: () => courseService.getModules(courseId),
     enabled: !!courseId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 };
 

@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Play, Lock, CheckCircle, Clock, Award, ChevronLeft, Loader2, Users, BarChart3 } from 'lucide-react';
 import { useCourse, useModules } from '../hooks/useCourses';
 import { useAuth } from '../contexts/AuthContext';
 
-export const Course: React.FC = () => {
+export const Course: React.FC = memo(() => {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -297,4 +297,6 @@ export const Course: React.FC = () => {
       </div>
     </div>
   );
-};
+});
+
+Course.displayName = 'Course';

@@ -5,7 +5,9 @@ export const useStats = () => {
   return useQuery({
     queryKey: ['stats'],
     queryFn: () => statsService.getDashboardStats(),
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 15, // 15 minutes - increased cache time
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 };
 
@@ -13,7 +15,9 @@ export const useActivities = (limit?: number) => {
   return useQuery({
     queryKey: ['activities', limit],
     queryFn: () => statsService.getRecentActivities(limit),
-    staleTime: 1000 * 60 * 2, // 2 minutes
+    staleTime: 1000 * 60 * 10, // 10 minutes - increased cache time
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 };
 
@@ -22,6 +26,8 @@ export const useAchievements = () => {
     queryKey: ['achievements'],
     queryFn: () => statsService.getAchievements(),
     staleTime: 1000 * 60 * 10, // 10 minutes
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 };
 
@@ -30,5 +36,7 @@ export const useLeaderboard = (period: 'week' | 'month' | 'all' = 'week') => {
     queryKey: ['leaderboard', period],
     queryFn: () => statsService.getLeaderboard(period),
     staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 };

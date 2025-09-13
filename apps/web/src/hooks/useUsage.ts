@@ -42,8 +42,9 @@ export const useUsage = () => {
   const { data: usage, isLoading, error, refetch } = useQuery({
     queryKey: ['usage'],
     queryFn: fetchUsage,
-    staleTime: 30000, // 30 seconds
-    refetchOnWindowFocus: true
+    staleTime: 1000 * 60 * 15, // 15 minutes - increased cache time
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   // Function to check if user can add more blogs (for components to use)

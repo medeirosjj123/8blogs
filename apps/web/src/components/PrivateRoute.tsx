@@ -12,6 +12,7 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
 
   console.log('PrivateRoute: Current path:', location.pathname, 'isLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
 
+  // Always show loading screen while authentication is being determined
   if (isLoading) {
     console.log('PrivateRoute: Still loading, showing spinner');
     return (
@@ -24,11 +25,26 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
     );
   }
 
-  if (!isAuthenticated) {
-    console.log('PrivateRoute: Not authenticated, redirecting to login');
+  // Only redirect to login after loading is complete AND user is not authenticated
+  if (!isLoading && !isAuthenticated) {
+    console.log('PrivateRoute: Loading complete, not authenticated, redirecting to login');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  console.log('PrivateRoute: Authenticated, rendering children');
-  return <>{children}</>;
+  // Only render children if loading is complete AND user is authenticated
+  if (!isLoading && isAuthenticated) {
+    console.log('PrivateRoute: Loading complete, authenticated, rendering children');
+    return <>{children}</>;
+  }
+
+  // Fallback: show loading if state is uncertain
+  console.log('PrivateRoute: Uncertain state, showing loading');
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-coral border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-slate-600">Carregando...</p>
+      </div>
+    </div>
+  );
 };

@@ -3,6 +3,10 @@ import type { AxiosError, AxiosInstance } from 'axios';
 import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
 
+// Request deduplication system
+const pendingRequests = new Map<string, Promise<any>>();
+const lastRequestTimes = new Map<string, number>();
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 // Create axios instance
@@ -56,7 +60,20 @@ export const tokenManager = {
 api.interceptors.request.use(
   (config) => {
     const token = tokenManager.getAccessToken();
-    console.log('API Request:', config.method?.toUpperCase(), config.url, 'Token:', token ? 'Present' : 'Missing');
+    const requestKey = `${config.method?.toUpperCase()}_${config.url}_${JSON.stringify(config.params)}`;
+    const now = Date.now();
+    
+    console.log('🌐 API Request:', config.method?.toUpperCase(), config.url, 'Token:', token ? 'Present' : 'Missing');
+    
+    // Check for recent duplicate requests (within 500ms)
+    const lastTime = lastRequestTimes.get(requestKey);
+    if (lastTime && (now - lastTime) < 500) {
+      console.log('🚫 Deduplicating rapid request:', requestKey);
+      return Promise.reject(new Error('DEDUPLICATED_REQUEST'));
+    }
+    
+    lastRequestTimes.set(requestKey, now);
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -87,12 +104,12 @@ api.interceptors.response.use(
       const refreshToken = tokenManager.getRefreshToken();
       console.log('Refresh token:', refreshToken ? 'Present' : 'Missing');
       
-      // Since we don't have refresh tokens in this system, just redirect to login
-      // if we get a 401 on a protected route
+      // Since we don't have refresh tokens in this system, just clear tokens
+      // and let the AuthContext handle the redirect
       if (!refreshToken) {
         console.error('No refresh token - need to re-login');
         tokenManager.clearTokens();
-        window.location.href = '/login';
+        // Don't force redirect here - let AuthContext and React Router handle it
         return Promise.reject(error);
       }
       
@@ -115,6 +132,11 @@ api.interceptors.response.use(
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
+    }
+
+    // Skip handling for deduplicated requests
+    if (error.message === 'DEDUPLICATED_REQUEST') {
+      return Promise.reject(error);
     }
 
     // Handle other errors - but skip showing toasts for bulk generation endpoints
