@@ -56,36 +56,55 @@ export class SimpleVpsSetup extends EventEmitter {
       // Step 2: Execute complete setup command chain
       const fullCommand = 'git config --global user.name "admin" && git config --global user.email "blog@bloghouse.com.br" && wget -qO wo wops.cc && bash wo && wo stack install --all && apt-get install -y fail2ban ufw && systemctl enable fail2ban && systemctl start fail2ban && ufw --force enable && ufw allow 22 && ufw allow 80 && ufw allow 443 && echo "✅ WordOps installed with firewall configured!"';
       
-      const progressSteps = [
-        { progress: 15, message: '🤖 IA trabalhando: Configurando Git...' },
-        { progress: 25, message: '🤖 IA trabalhando: Baixando WordOps...' },
-        { progress: 45, message: '🤖 IA trabalhando: Instalando WordOps (pode demorar 5-10 minutos)...' },
-        { progress: 70, message: '🤖 IA trabalhando: Instalando stack WordPress (pode demorar 5 minutos)...' },
-        { progress: 80, message: '🤖 IA trabalhando: Instalando fail2ban e firewall...' },
-        { progress: 85, message: '🤖 IA trabalhando: Configurando fail2ban...' },
-        { progress: 95, message: '🤖 IA trabalhando: Configurando firewall...' }
-      ];
+      // Real-time progress will be tracked based on actual command output
 
       logger.info('Executing complete VPS setup command chain');
       
-      // Start progress updates
-      let progressIndex = 0;
-      const progressInterval = setInterval(() => {
-        if (progressIndex < progressSteps.length) {
-          this.emit('progress', {
-            step: `step_${progressIndex}`,
-            message: progressSteps[progressIndex].message,
-            progress: progressSteps[progressIndex].progress
-          });
-          progressIndex++;
+      // Execute command with real-time output monitoring
+      const result = await this.ssh.execCommand(fullCommand, {
+        onStdout: (chunk) => {
+          const output = chunk.toString();
+          logger.info({ output: output.substring(0, 200) }, 'VPS setup output');
+          
+          // Track real progress based on actual command output
+          if (output.includes('git config') || output.includes('Configured')) {
+            this.emit('progress', {
+              step: 'git_config',
+              message: '🤖 IA trabalhando: Git configurado com sucesso...',
+              progress: 15
+            });
+          } else if (output.includes('wo wops.cc') || output.includes('WordOps')) {
+            this.emit('progress', {
+              step: 'wordops_download',
+              message: '🤖 IA trabalhando: WordOps baixado, iniciando instalação...',
+              progress: 25
+            });
+          } else if (output.includes('Stack installed successfully') || output.includes('MySQL installed') || output.includes('NGINX installed')) {
+            this.emit('progress', {
+              step: 'stack_install',
+              message: '🤖 IA trabalhando: Stack WordPress instalado com sucesso...',
+              progress: 70
+            });
+          } else if (output.includes('fail2ban') || output.includes('ufw')) {
+            this.emit('progress', {
+              step: 'security_setup',
+              message: '🤖 IA trabalhando: Configurando segurança (firewall + fail2ban)...',
+              progress: 85
+            });
+          } else if (output.includes('WordOps installed with firewall configured')) {
+            this.emit('progress', {
+              step: 'finalizing',
+              message: '🤖 IA trabalhando: Finalizando configuração...',
+              progress: 95
+            });
+          }
+        },
+        onStderr: (chunk) => {
+          const errorOutput = chunk.toString();
+          logger.warn({ errorOutput }, 'VPS setup stderr');
+          // Don't emit progress for stderr, but log for debugging
         }
-      }, 120000); // Update every 2 minutes
-      
-      // Execute the full command
-      const result = await this.ssh.execCommand(fullCommand);
-      
-      // Clear the progress interval
-      clearInterval(progressInterval);
+      });
       
       if (result.code !== 0) {
         throw new Error(`VPS setup failed with exit code ${result.code}: ${result.stderr}`);
