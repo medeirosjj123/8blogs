@@ -78,13 +78,28 @@ export async function getCourses(req: AuthRequest, res: Response): Promise<void>
       }
     }
     
-    // Map courses with real module data
+    // Filter courses based on user plan - only Black Belt users should see courses
+    if (userPlan !== 'black_belt') {
+      logger.info({
+        userPlan,
+        isBlackBelt: false,
+        action: 'hiding_courses'
+      }, 'Non-Black Belt user - hiding courses');
+      
+      res.json({
+        success: true,
+        data: [] // Return empty array for non-Black Belt users
+      });
+      return;
+    }
+    
+    // Map courses with real module data (only for Black Belt users)
     const coursesData = await Promise.all(courses.map(async (course) => {
       const modules = await Module.find({ courseId: course._id }).populate('lessons');
       const totalLessons = modules.reduce((sum, module) => sum + module.lessons.length, 0);
       
-      // Courses are only accessible to Black Belt users
-      const isLocked = userPlan !== 'black_belt';
+      // Courses are always unlocked for Black Belt users
+      const isLocked = false;
       
       // Debug logging for each course
       if (course.title.includes('SEO') || course.title.includes('Introdução')) {
@@ -92,8 +107,8 @@ export async function getCourses(req: AuthRequest, res: Response): Promise<void>
           courseTitle: course.title,
           userPlan,
           isLocked,
-          lockLogic: `${userPlan} !== 'black_belt' = ${isLocked}`
-        }, 'Course lock status');
+          action: 'showing_course_to_black_belt'
+        }, 'Course access granted to Black Belt user');
       }
       
       return {

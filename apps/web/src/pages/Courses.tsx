@@ -308,12 +308,31 @@ export const Courses: React.FC = () => {
       ) : (
         <div className="bg-white rounded-2xl shadow-soft p-12 text-center">
           <BookOpen className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-slate-900 mb-2">
-            Nenhum curso encontrado
-          </h3>
-          <p className="text-slate-600">
-            Tente ajustar os filtros ou faça uma nova busca
-          </p>
+          {usage?.plan !== 'black_belt' ? (
+            <>
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                Cursos Exclusivos Black Belt
+              </h3>
+              <p className="text-slate-600 mb-6">
+                Os cursos estão disponíveis apenas para usuários com plano Black Belt.
+              </p>
+              <button
+                onClick={() => navigate('/precos')}
+                className="bg-gradient-to-r from-coral to-coral-dark text-white px-6 py-3 rounded-lg font-medium hover:shadow-lg transition-all"
+              >
+                Fazer Upgrade para Black Belt
+              </button>
+            </>
+          ) : (
+            <>
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                Nenhum curso encontrado
+              </h3>
+              <p className="text-slate-600">
+                Tente ajustar os filtros ou faça uma nova busca
+              </p>
+            </>
+          )}
         </div>
       )}
 
