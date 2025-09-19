@@ -148,10 +148,17 @@ export async function getCourses(req: AuthRequest, res: Response): Promise<void>
       data: coursesData
     });
   } catch (error) {
-    logger.error({ error }, 'Error fetching courses');
+    logger.error({ 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      errorDetails: error 
+    }, 'Error fetching courses');
     res.status(500).json({
       success: false,
-      error: { message: 'Failed to fetch courses' }
+      error: { 
+        message: 'Failed to fetch courses',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }
     });
   }
 }
