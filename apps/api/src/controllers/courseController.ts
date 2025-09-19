@@ -18,6 +18,33 @@ const logger = pino({
   }
 });
 
+// Simple test endpoint to check database connectivity
+export async function testDb(req: Request, res: Response): Promise<void> {
+  try {
+    const courseCount = await Course.countDocuments();
+    const userCount = await User.countDocuments();
+    
+    res.json({
+      success: true,
+      data: {
+        mongodb: 'connected',
+        courseCount,
+        userCount,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    logger.error({ error }, 'Database test failed');
+    res.status(500).json({
+      success: false,
+      error: {
+        message: 'Database connection failed',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }
+    });
+  }
+}
+
 // Get all published courses
 export async function debugUserPlan(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -59,9 +86,11 @@ export async function getCourses(req: AuthRequest, res: Response): Promise<void>
     
     // Check user plan for course access (handle both authenticated and unauthenticated requests)
     let userPlan = 'starter';
+    let user = null;
+    
     if (req.user) {
       try {
-        const user = await User.findById(req.user.userId);
+        user = await User.findById(req.user.userId);
         userPlan = user?.plan || user?.subscription?.plan || 'starter';
         
         // Debug logging
