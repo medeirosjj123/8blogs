@@ -81,6 +81,8 @@ export async function getCourses(req: AuthRequest, res: Response): Promise<void>
     // Filter courses based on user plan - only Black Belt users should see courses
     if (userPlan !== 'black_belt') {
       logger.info({
+        userId: req.user?.userId,
+        userEmail: req.user ? user?.email : 'unauthenticated',
         userPlan,
         isBlackBelt: false,
         action: 'hiding_courses'
@@ -94,6 +96,15 @@ export async function getCourses(req: AuthRequest, res: Response): Promise<void>
     }
     
     // Map courses with real module data (only for Black Belt users)
+    logger.info({
+      userId: req.user?.userId,
+      userEmail: user?.email,
+      userPlan,
+      isBlackBelt: true,
+      action: 'showing_courses',
+      courseCount: courses.length
+    }, 'Black Belt user - showing courses');
+    
     const coursesData = await Promise.all(courses.map(async (course) => {
       const modules = await Module.find({ courseId: course._id }).populate('lessons');
       const totalLessons = modules.reduce((sum, module) => sum + module.lessons.length, 0);
