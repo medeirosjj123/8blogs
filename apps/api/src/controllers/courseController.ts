@@ -130,7 +130,7 @@ export async function getCourses(req: AuthRequest, res: Response): Promise<void>
     if (userPlan !== 'black_belt') {
       logger.info({
         userId: req.user?.userId,
-        userEmail: req.user ? user?.email : 'unauthenticated',
+        userEmail: user?.email || 'unauthenticated',
         userPlan,
         isBlackBelt: false,
         action: 'hiding_courses'
