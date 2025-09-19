@@ -100,7 +100,7 @@ export async function getCourses(req: AuthRequest, res: Response): Promise<void>
     
     // Step 2: Check user plan for course access (handle both authenticated and unauthenticated requests)
     let userPlan = 'starter';
-    let user = null;
+    let user: any = null;
     
     if (req.user) {
       try {
