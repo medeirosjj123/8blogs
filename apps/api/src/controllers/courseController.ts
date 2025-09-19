@@ -80,31 +80,50 @@ export async function debugUserPlan(req: AuthRequest, res: Response): Promise<vo
 
 export async function getCourses(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const courses = await Course.find({ isPublished: true })
-      .populate('modules')
-      .sort({ order: 1, createdAt: -1 });
+    logger.info('getCourses: Starting request', { 
+      hasUser: !!req.user,
+      userId: req.user?.userId 
+    });
+
+    // Step 1: Fetch courses - wrap in try/catch to isolate
+    let courses;
+    try {
+      logger.info('getCourses: Fetching courses from database');
+      courses = await Course.find({ isPublished: true })
+        .populate('modules')
+        .sort({ order: 1, createdAt: -1 });
+      logger.info('getCourses: Successfully fetched courses', { count: courses.length });
+    } catch (error) {
+      logger.error({ error }, 'getCourses: Error fetching courses from database');
+      throw new Error(`Database query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
     
-    // Check user plan for course access (handle both authenticated and unauthenticated requests)
+    // Step 2: Check user plan for course access (handle both authenticated and unauthenticated requests)
     let userPlan = 'starter';
     let user = null;
     
     if (req.user) {
       try {
+        logger.info('getCourses: Fetching user data', { userId: req.user.userId });
         user = await User.findById(req.user.userId);
-        userPlan = user?.plan || user?.subscription?.plan || 'starter';
         
-        // Debug logging
-        logger.info({
-          userId: req.user.userId,
-          userEmail: user?.email,
-          directPlan: user?.plan,
-          subscriptionPlan: user?.subscription?.plan,
-          finalUserPlan: userPlan,
-          isBlackBelt: userPlan === 'black_belt'
-        }, 'Course access plan check');
+        if (!user) {
+          logger.warn('getCourses: User not found in database', { userId: req.user.userId });
+          userPlan = 'starter';
+        } else {
+          userPlan = user?.plan || user?.subscription?.plan || 'starter';
+          logger.info('getCourses: User plan determined', { 
+            userEmail: user.email,
+            userPlan,
+            isBlackBelt: userPlan === 'black_belt'
+          });
+        }
       } catch (error) {
-        logger.warn({ error: error instanceof Error ? error.message : 'Unknown error' }, 'Could not fetch user plan, defaulting to starter');
+        logger.error({ error }, 'getCourses: Error fetching user, defaulting to starter');
+        userPlan = 'starter';
       }
+    } else {
+      logger.info('getCourses: No user authentication, defaulting to starter plan');
     }
     
     // Filter courses based on user plan - only Black Belt users should see courses
@@ -124,19 +143,24 @@ export async function getCourses(req: AuthRequest, res: Response): Promise<void>
       return;
     }
     
-    // Map courses with real module data (only for Black Belt users)
-    logger.info({
+    // Step 3: Process courses for Black Belt users
+    logger.info('getCourses: Processing courses for Black Belt user', {
       userId: req.user?.userId,
       userEmail: user?.email,
       userPlan,
-      isBlackBelt: true,
-      action: 'showing_courses',
       courseCount: courses.length
-    }, 'Black Belt user - showing courses');
+    });
     
-    const coursesData = await Promise.all(courses.map(async (course) => {
-      const modules = await Module.find({ courseId: course._id }).populate('lessons');
-      const totalLessons = modules.reduce((sum, module) => sum + module.lessons.length, 0);
+    let coursesData;
+    try {
+      coursesData = await Promise.all(courses.map(async (course) => {
+        logger.info('getCourses: Processing individual course', { 
+          courseId: course._id, 
+          courseTitle: course.title 
+        });
+        
+        const modules = await Module.find({ courseId: course._id }).populate('lessons');
+        const totalLessons = modules.reduce((sum, module) => sum + module.lessons.length, 0);
       
       // Courses are always unlocked for Black Belt users
       const isLocked = false;
@@ -171,6 +195,14 @@ export async function getCourses(req: AuthRequest, res: Response): Promise<void>
         currentLesson: null
       };
     }));
+    } catch (error) {
+      logger.error({ error }, 'getCourses: Error processing courses data');
+      throw new Error(`Course processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    
+    logger.info('getCourses: Successfully processed courses', { 
+      courseCount: coursesData.length 
+    });
     
     res.json({
       success: true,
