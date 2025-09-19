@@ -20,6 +20,7 @@ router.get('/', optionalAuth, getCourses);
 
 // Debug routes
 router.get('/debug/test-db', testDb);
+router.get('/debug/test-db-auth', authenticate, testDb);
 router.get('/debug/user-plan', authenticate, debugUserPlan);
 
 // Protected routes (auth required)
